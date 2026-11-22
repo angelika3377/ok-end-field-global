@@ -7,6 +7,7 @@ from typing import ClassVar
 
 from qfluentwidgets import FluentIcon
 
+from src.core.BattleConfig import KEY_DAILY_BURST_DELAY
 from src.core.config_migration import _NO_MIGRATION
 from src.core.email_service import send_daily_summary_email
 from src.tasks.account.account_mixin import AccountMixin
@@ -342,6 +343,10 @@ class DailyTask(Common, EndCommandMixin, AccountMixin):
                 self.CFG_BOAT_TASKS: "选择参加一键日常的帝江号任务；执行顺序固定为送礼、帝江号整理、帝江号收菜。",
                 self.CFG_OTHER_TASKS: "选择参加一键日常的其他任务；顺序由程序固定，避免打散可复用的场景状态。",
                 self.CFG_BATTLE_TASKS: "选择参加一键日常的战斗任务；刷体力、演算与影拓丰碑连续执行。",
+                KEY_DAILY_BURST_DELAY: (
+                    "Seconds after combat is detected before the skill rotation can start. "
+                    "Basic attacks and target search begin immediately. Set to 0 for no delay."
+                ),
                 self.CFG_REWARD_TASKS: "选择参加一键日常的奖励任务；奖励块固定安排在普通业务任务之后。",
                 self.CFG_FARM_TASKS: "农牧领取单独成块，固定安排在奖励之后、自动送货之前执行。",
                 self.CFG_DELIVERY_TASKS: "自动送货是高风险长流程，固定在农牧与奖励之后、最终归位之前执行。",
@@ -387,6 +392,7 @@ class DailyTask(Common, EndCommandMixin, AccountMixin):
                 # 清理基质默认不勾选：分解不可回滚，须用户主动开启
                 self.CFG_OTHER_TASKS: [task for task in self.OTHER_TASKS if task != "清理基质" and task != "环境监测"],
                 self.CFG_BATTLE_TASKS: list(self.BATTLE_TASKS),
+                KEY_DAILY_BURST_DELAY: 0.0,
                 self.CFG_REWARD_TASKS: list(self.REWARD_TASKS),
                 self.CFG_FARM_TASKS: list(self.FARM_TASKS),
                 self.CFG_DELIVERY_TASKS: [],
@@ -415,7 +421,7 @@ class DailyTask(Common, EndCommandMixin, AccountMixin):
             {
                 "帝江号": [self.CFG_BOAT_TASKS],
                 "其他日常": [self.CFG_OTHER_TASKS],
-                "战斗": [self.CFG_BATTLE_TASKS],
+                "战斗": [self.CFG_BATTLE_TASKS, KEY_DAILY_BURST_DELAY],
                 "奖励": [self.CFG_REWARD_TASKS],
                 "农牧": [self.CFG_FARM_TASKS],
                 "自动送货": [self.CFG_DELIVERY_TASKS],

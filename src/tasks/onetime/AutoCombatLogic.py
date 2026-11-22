@@ -1,10 +1,9 @@
 import traceback
+from math import isfinite
 
 from src.config import config as app_config
 from src.core.BaseEfTask import BaseEfTask
 from src.core.BattleConfig import (
-    KEY_BATTLE_INITIAL_WAIT,
-    KEY_BATTLE_INITIAL_WAIT_PROTOCOL_ONLY,
     KEY_COND_ENABLED,
     KEY_COND_SEQUENCE,
     KEY_DAMAGE_ROTATION,
@@ -23,7 +22,7 @@ from src.data.skill_rotation import (
     rotate_auto_rotation_for_current,
 )
 from src.image.recommend_skill_detector import get_recommend_skill_detector
-from src.tasks.onetime.ImmediateTimedCombatLogic import ImmediateTimedCombatLogic as TimedCombatLogic
+from src.tasks.onetime.TimedCombatLogic import TimedCombatLogic
 
 
 class _TaskProbe:
@@ -55,6 +54,8 @@ class AutoCombatLogic:
         self.rotation_enabled = None
         self.task = task
         self._normal_attack_hold_enabled = False
+        self._exit_pending = False
+        self._next_exit_check_time = 0
         self.normal_skill_sequence: list = []
         self.normal_start_trigger: int = 2
         self.normal_skill_index: int = 0
@@ -83,6 +84,7 @@ class AutoCombatLogic:
     _SKILL_RETRY_MAX_FRAMES = 5  # 技力不足最大等待帧数（≈0.5s）
     _LOW_RES_WARN_INTERVAL = 5.0  # 低分辨率未进入战斗时警告间隔（秒）
     _SECOND_EXIT_THRESHOLD = 1.0  # 进入战斗后该秒数内退出视为“秒退”（等同未进入战斗）
+    _EXIT_CHECK_INTERVAL = 0.5
     _TEAM_DETECT_INTERVAL = 1.0  # 战斗主循环中的队伍识别间隔（秒）
     _TEAM_DETECT_MAX_ATTEMPTS = 6  # 战斗主循环中的队伍识别尝试上限
 
@@ -117,29 +119,6 @@ class AutoCombatLogic:
             except Exception:
                 pass
         return False
-
-    def _resolve_initial_wait(self, start_sleep: float | None) -> float:
-        """Resolve the legacy startup-delay input for call compatibility.
-
-        Battle readiness is now state-driven by ``in_combat(required_yellow=1)``.
-        The returned value is retained only for callers/tests that still pass the
-        historical argument; runtime combat paths no longer block on it.
-        """
-        task = self.task
-        value = start_sleep if start_sleep is not None else task.get_battle_config(KEY_BATTLE_INITIAL_WAIT, 3)
-        try:
-            wait_seconds = max(0.0, float(value))
-        except (TypeError, ValueError):
-            wait_seconds = 0.0
-
-        if wait_seconds <= 0:
-            return 0.0
-        if not task.get_battle_config(KEY_BATTLE_INITIAL_WAIT_PROTOCOL_ONLY, False):
-            return wait_seconds
-
-        if self._try_detect_protocol_space():
-            return wait_seconds
-        return 0.0
 
     def _align_auto_rotation_to_current(self, task, sequence: list[str]) -> list[str]:
         """把自动轴旋转到当前主控角色的段开头（切人图标判定成功时）。
@@ -179,8 +158,19 @@ class AutoCombatLogic:
             task.log_info(f"自动排轴已生成（可重复循环）: {self.auto_rotation_sequence}")
         return skill_sequence
 
+    def _poll_combat_exit(self, now):
+        if now < self._next_exit_check_time:
+            return False
+        task = self.task
+        task.next_frame()
+        self._next_exit_check_time = task.active_time() + self._EXIT_CHECK_INTERVAL
+        self._exit_pending = bool(task._check_single_exit_condition())
+        if self._exit_pending and task.debug:
+            task.screenshot("out_of_combat")
+        return task.is_combat_ended(self._exit_pending)
+
     def _sync_normal_attack_hold(self):
-        if self._normal_attack_hold_enabled:
+        if self._normal_attack_hold_enabled and not self._exit_pending:
             self.task.active_and_send_mouse_delta(activate=True, only_activate=True)
             self.task.mouse_down(key="left")
         else:
@@ -273,36 +263,39 @@ class AutoCombatLogic:
 
         if token.startswith("sleep_"):
             sleep_time = float(token[6:])
-            if deadline is not None:
-                remaining = deadline - task.active_time()
-                if remaining <= 0:
-                    task.log_info("自动战斗达到最大等待时间")
-                    return True, "return_false"
-                if sleep_time > remaining:
-                    task.log_info(f"等待被截断至截止时间（原 {sleep_time:.3f} 秒，剩余 {remaining:.3f} 秒）")
-                    task.sleep(remaining)
-                    task.log_info("自动战斗达到最大等待时间")
-                    return True, "return_false"
             task.log_info(f"等待 {sleep_time:.3f} 秒")
-            task.sleep(sleep_time)
-            return True, ""
+            sleep_end = task.active_time() + sleep_time
+            while True:
+                now = task.active_time()
+                if deadline is not None and now >= deadline:
+                    task.log_info("自动战斗达到最大等待时间")
+                    return True, "return_false"
+                if self._poll_combat_exit(now):
+                    return True, "break"
+                self._sync_normal_attack_hold()
+                if now >= sleep_end:
+                    return True, ""
+                wake_at = min(sleep_end, self._next_exit_check_time)
+                if deadline is not None:
+                    wake_at = min(wake_at, deadline)
+                task.sleep(max(0, wake_at - task.active_time()))
 
         if token.startswith("normal_"):
             normal_duration = float(token[7:])
             task.log_info(f"临时切换普通战斗 {normal_duration:.3f} 秒")
             self.normal_skill_index = 0
             normal_end_time = task.active_time() + normal_duration
-            while task.active_time() < normal_end_time:
-                if deadline is not None and task.active_time() >= deadline:
+            while (now := task.active_time()) < normal_end_time:
+                if deadline is not None and now >= deadline:
                     task.log_info("自动战斗达到最大等待时间")
                     return True, "return_false"
-                self._periodic_search()
+                if self._poll_combat_exit(now):
+                    return True, "break"
                 self._sync_normal_attack_hold()
-                now_check = task.active_time()
-                if now_check - self._last_exit_check_time >= self._exit_check_interval:
-                    self._last_exit_check_time = now_check
-                    if task._check_single_exit_condition():
-                        return True, "break"
+                if self._exit_pending:
+                    task.sleep(0.1)
+                    continue
+                self._periodic_search()
                 task.approach_enemy()
                 task.next_frame()
                 _probe_pulse = getattr(task, "probe_pulse", None)
@@ -473,9 +466,15 @@ class AutoCombatLogic:
             min_w, min_h = app_config["supported_resolution"]["min_size"]
             task.log_warning(f"低于{min_w}x{min_h}自动战斗匹配不良，请切换{min_w}x{min_h}及以上分辨率", notify=True)
 
-    def run(self, start_sleep: float | None = None, no_battle: bool = False, deadline: float | None = None):
-        self._last_exit_check_time = 0
-        self._exit_check_interval = 0.5
+    def run(
+        self,
+        start_sleep: float | None = None,
+        no_battle: bool = False,
+        deadline: float | None = None,
+        *,
+        burst_delay: float = 0,
+    ):
+        # start_sleep is the ignored legacy argument. Daily Tasks opt in via burst_delay.
         self._last_team_detect_time = -self._TEAM_DETECT_INTERVAL
         self._team_detect_attempts = 0
         task = self.task
@@ -495,14 +494,21 @@ class AutoCombatLogic:
             task.sleep(0.5)
             return False
 
-        return self._run_confirmed_combat(start_sleep, no_battle, deadline)
+        return self._run_confirmed_combat(burst_delay, no_battle, deadline)
 
     @without_learning("battle")
-    def _run_confirmed_combat(self, start_sleep, no_battle, deadline):
+    def _run_confirmed_combat(self, burst_delay, no_battle, deadline):
         task = self.task
         # 已确认进入战斗，记录进入时刻（用于“秒退”判定）
         combat_enter_time = task.active_time()
         self.protocol_space_detected = False
+        try:
+            delay = float(burst_delay or 0)
+        except (TypeError, ValueError):
+            delay = 0
+        if not isfinite(delay) or delay < 0:
+            delay = 0
+        skills_ready_at = combat_enter_time + delay
 
         # 非战斗 → 战斗 转换时复位推荐技能检测器，每场战斗仅一次：
         # 上一场结束时可能残留 active 标签（战斗外不调用 detect，不会自复位），
@@ -518,10 +524,16 @@ class AutoCombatLogic:
 
         if task.get_battle_config(KEY_TIMING_ROTATION, False):
             return TimedCombatLogic(task).run(
-                start_sleep=start_sleep,
+                start_sleep=max(0, skills_ready_at - task.active_time()),
                 no_battle=no_battle,
                 deadline=deadline,
             )
+
+        task.exit_check_count = 0
+        task._squad_hud_absent_since = None
+        self._exit_pending = False
+        self._next_exit_check_time = combat_enter_time
+        self._last_search_time = combat_enter_time - 1.0
 
         # 初始化普通战斗配置属性（排轴与普通模式共用）
         self.normal_skill_sequence = task.get_battle_config("技能释放", ["1", "2", "3"])
@@ -534,8 +546,6 @@ class AutoCombatLogic:
         # 「战技+终结技+连携+普攻填充」的可重复循环轴并接管执行；
         # 关闭时仅生成伤害降序的战技槽位列表（普通模式循环释放）。
         _damage_rotation_enabled = _skill_allowlist_enabled and task.get_battle_config(KEY_DAMAGE_ROTATION, True)
-        if _damage_rotation_enabled:
-            self._resolve_initial_wait(start_sleep)
         self.auto_rotation_enabled = _damage_rotation_enabled
         self.auto_rotation_active = False
         self.auto_rotation_sequence = []
@@ -580,7 +590,7 @@ class AutoCombatLogic:
                 if not self.skill_sequence:
                     self.rotation_active = False
                 self.task.log_info(f"解析后的排轴技能序列: {self.skill_sequence}")
-                self.last_rotation_ok_time = task.active_time()
+                self.last_rotation_ok_time = max(task.active_time(), skills_ready_at)
 
         if not no_battle:
             task.log_info("检测到进入战斗,开始自动战斗流程")
@@ -588,48 +598,24 @@ class AutoCombatLogic:
 
             if task.debug:
                 task.screenshot("enter_combat")
-            task.active_and_send_mouse_delta(activate=True, only_activate=True)
-            task.sleep(0.1)
-            task.click(key="middle")
             self._normal_attack_hold_enabled = True
-            self._sync_normal_attack_hold()
 
             # 战斗已由 required_yellow=1 的血条门控确认，不再做固定开场等待。
             # 队伍与协议空间识别由下方主循环立即尝试并按间隔重试。
 
         try:
             while True:
-                if deadline is not None and task.active_time() >= deadline:
+                now = task.active_time()
+                if deadline is not None and now >= deadline:
                     task.log_info("自动战斗达到最大等待时间")
                     return False
-                self._periodic_search()
+                if self._poll_combat_exit(now):
+                    break
                 self._sync_normal_attack_hold()
-
-                now = task.active_time()
-                if now - self._last_exit_check_time >= self._exit_check_interval:
-                    self._last_exit_check_time = now
-
-                    exit_condition = task._check_single_exit_condition()
-                    if exit_condition:
-                        if task.debug:
-                            task.screenshot("out_of_combat")
-                        if task.is_combat_ended(exit_condition):
-                            # 秒退：进入战斗后很快退出，同样视为未进入战斗，低分辨率警告继续
-                            if task.active_time() - combat_enter_time < self._SECOND_EXIT_THRESHOLD:
-                                self._warn_low_resolution_if_due()
-                            task.log_info("自动战斗结束!", notify=task.get_battle_config("完成通知"))
-                            task.log_info("退出战斗主循环")
-                            self._normal_attack_hold_enabled = False
-                            self._sync_normal_attack_hold()
-                            # 战斗结束确认：清战斗标记，下次进入战斗（含结算未出现时
-                            # auto_battle 直接重入的新战斗）才会复位推荐技能检测器
-                            task._recommend_detector_in_combat = False
-                            break
-                if no_battle:
-                    self._normal_attack_hold_enabled = False
-                    self._sync_normal_attack_hold()
-                    task.sleep(0.5)
+                if self._exit_pending or no_battle:
+                    task.sleep(0.1 if self._exit_pending else 0.5)
                     continue
+                self._periodic_search()
 
                 # 按间隔尝试稳定识别队伍，识别成功或达到尝试上限后停止扫描
                 team_detect_due = now - self._last_team_detect_time >= self._TEAM_DETECT_INTERVAL
@@ -667,6 +653,9 @@ class AutoCombatLogic:
                 if callable(_probe_pulse):
                     _probe_pulse()
 
+                if task.active_time() < skills_ready_at:
+                    continue
+
                 # ── 模式分发：实时条件 > 普通排轴 > 自动排轴 > 普通 ──────────
                 if self.cond_rotation_enabled:
                     signal, had_action = self._do_conditional_rotation_step(deadline)
@@ -702,7 +691,13 @@ class AutoCombatLogic:
         except Exception as exc:
             task.log_info(f"自动战斗发生异常: {exc}")
             task.log_info(traceback.format_exc())
+            return True
         finally:
             self._normal_attack_hold_enabled = False
             self._sync_normal_attack_hold()
+        task._recommend_detector_in_combat = False
+        if task.active_time() - combat_enter_time < self._SECOND_EXIT_THRESHOLD:
+            self._warn_low_resolution_if_due()
+        task.log_info("自动战斗结束!", notify=task.get_battle_config("完成通知"))
+        task.log_info("退出战斗主循环")
         return True

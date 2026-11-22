@@ -6,6 +6,7 @@ KEY_SKILL_RELEASE = "技能释放"
 KEY_START_SKILL_POINT = "启动技能点数"
 KEY_COMPLETE_NOTIFY = "完成通知"
 KEY_NO_NUMBER_OPERATION_INTERVAL = "无数字操作间隔"
+KEY_DAILY_BURST_DELAY = "Burst delay (seconds)"
 # 兼容旧调用/旧测试保留名称；不再注册为可持久化战斗配置，也不再控制实际等待。
 KEY_BATTLE_INITIAL_WAIT = "进入战斗后的初始等待时间"
 KEY_BATTLE_INITIAL_WAIT_PROTOCOL_ONLY = "仅协议空间启用初始等待"

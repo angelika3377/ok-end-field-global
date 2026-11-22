@@ -1218,9 +1218,6 @@ class TimedCombatLogic:
                 self._hold(True, force=force_normal_attack)
                 if force_normal_attack:
                     next_normal_attack = now + self._NORMAL_ATTACK_REASSERT_INTERVAL
-                if now < ready_at:
-                    task.sleep(0.1)
-                    continue
                 if not self.team and now >= next_team:
                     next_team = now + 1
                     detect_deadline = min(now + 0.3, deadline) if deadline is not None else now + 0.3
@@ -1232,6 +1229,12 @@ class TimedCombatLogic:
                     self._refresh_team_slots(refresh_deadline)
                 if deadline is not None and task.active_time() >= deadline:
                     return False
+                if task.active_time() < ready_at:
+                    if now >= next_lock:
+                        next_lock = now + 1
+                        task.click(key="middle")
+                    task.sleep(0.05)
+                    continue
                 self.step()
                 if self._allowed() and task.active_time() >= next_lock:
                     next_lock = task.active_time() + 1

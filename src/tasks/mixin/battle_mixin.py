@@ -37,9 +37,9 @@ from src.core.BattleConfig import (
     BATTLE_ROOT_CONFIGS,
     DEFAULT_BATTLE_CONFIG,
     DEFAULT_LEGACY_COMBAT_MODE,
-    KEY_BATTLE_INITIAL_WAIT,
     KEY_COMPLETE_NOTIFY,
     KEY_COND_ENABLED,
+    KEY_DAILY_BURST_DELAY,
     KEY_DAMAGE_ROTATION,
     KEY_ENABLE_ROTATION,
     KEY_LEGACY_COMBAT_MODE,
@@ -1438,9 +1438,8 @@ class BattleMixin(BaseEfTask):
         """
         单次战斗结束判定。
         """
-        # 结算模板优先检查：检测到 fL.b 结算模板同样判定战斗结束
-        if self.find_feature(feature=fL.b):
-            self.log_info("退出检查通过: 检测到结算模板 fL.b")
+        if self.is_battle_settlement():
+            self.log_info("退出检查通过: 检测到战斗结算")
             return True
 
         # 终结技演出可能暂时隐藏左侧队伍 HUD，保留原来的保护窗口。
@@ -1656,14 +1655,12 @@ class BattleMixin(BaseEfTask):
         判断是否进入战斗结算状态
         """
 
-        return any(
-            (
-                self.find_feature(feature=fL.b),
-                self.find_feature(feature=fL.battle_space_ok),
-                self.find_feature(feature=fL.battle_gather_ok),
-                self.find_feature(feature=fL.restart_battle),
-                self.find_feature(feature=fL.restart_battle, box=self.box_of_screen(0.550, 0.896, 0.574, 0.943)),
-            )
+        return bool(
+            self.find_feature(feature=fL.b)
+            or self.find_feature(feature=fL.battle_space_ok)
+            or self.find_feature(feature=fL.battle_gather_ok)
+            or self.find_feature(feature=fL.restart_battle)
+            or self.find_feature(feature=fL.restart_battle, box=self.box_of_screen(0.550, 0.896, 0.574, 0.943))
         )
 
     def start_touch_challenge(self):  # 已入场后搜索触碰点；调用任务需同时具备 SearchMixin
@@ -1723,7 +1720,8 @@ class BattleMixin(BaseEfTask):
         start_time = self.active_time()
         deadline = start_time + 420
         last_battle_time = None
-        sleep_time = self.get_battle_config(KEY_BATTLE_INITIAL_WAIT, 3)
+        daily_host = getattr(getattr(self, "daily_runner", None), "task", None)
+        burst_delay = daily_host.config.get(KEY_DAILY_BURST_DELAY, 0) if daily_host is not None else 0
 
         while True:
             # 全局超时保护
@@ -1747,14 +1745,14 @@ class BattleMixin(BaseEfTask):
 
             # 检测战斗
             battle_detected = AutoCombatLogic(self).run(
-                start_sleep=sleep_time,
+                burst_delay=burst_delay,
                 no_battle=no_battle,
                 deadline=deadline,
             )
 
             if battle_detected:
                 last_battle_time = self.active_time()
-                sleep_time = 0.1
+                burst_delay = 0
             else:
                 self.sleep(0.1)
 
