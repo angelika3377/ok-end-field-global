@@ -35,6 +35,7 @@ from src.tasks.navigation.mixin.zip_line_mixin import ZipLineMixin
 
 MAX_STORAGE_TICKET = 1000
 ONE_MEDICINE_RESTORE_ENERGY = 40
+DOUBLE_REWARD_LABEL = re.compile(r"\bdouble\s+(?:the\s+)?rewards?\b|[双雙]倍(?:[奖獎][励勵]|[获獲]得)", re.IGNORECASE)
 
 
 @dataclass
@@ -814,8 +815,10 @@ class BattleTask(Common, MapMixin, ZipLineMixin, BattleMixin):
                 self.battle_ctx.extra_run_count += 1
             else:
                 # 在『有可领取的奖励』页面上领取奖励
-                self.battle_ctx.left_ticket = self.get_claim()
-                #
+                remaining = self.get_claim()
+                if remaining is None:
+                    return False
+                self.battle_ctx.left_ticket = remaining
                 if self.battle_ctx.left_ticket <= 0:
                     # 一个循环：先等『离开战斗』按钮出现，出现后点击，再等按钮消失
                     left_battle_deadline = self.active_time() + 15
@@ -1169,69 +1172,73 @@ class BattleTask(Common, MapMixin, ZipLineMixin, BattleMixin):
 
             raise
 
+    def _select_double_reward(self, cost):
+        if not self.wait_click_ocr(
+            match=DOUBLE_REWARD_LABEL,
+            box=self.box_of_screen(0.27, 0.51, 0.75, 0.70),
+            time_out=2,
+        ):
+            return False
+
+        # The totals row shows the active selection and marks unaffordable
+        # Sanity or permit costs in red.
+        totals_box = self.box_of_screen(0.52, 0.735, 0.68, 0.795)
+        if not self.wait_ocr(
+            match=re.compile(rf"(?<!\d){cost}\s*$"),
+            box=totals_box,
+            time_out=2,
+        ):
+            return False
+        totals = totals_box.crop_frame(self.frame).astype("int16")
+        blue, green, red = totals.transpose(2, 0, 1)
+        red_cost = (red > green + 25) & (red > blue + 20) & (abs(green - blue) < 40)
+        return red_cost.sum() < 6
+
     def get_claim(self):
-        """
-        执行一次领奖操作，并返回剩余理智。
+        """Claim the best affordable reward, or return None if claiming fails."""
+        if not self.wait_feature(feature=fL.get_claim_page, time_out=5, raise_if_not_found=False):
+            self.mark_task_failure("Reward claim screen did not appear")
+            return None
 
-        逻辑：
-        1. 等待界面稳定，并找到“可领取”提示。
-        2. 尝试点击“获得奖励”，如果失败则本轮任务失败。
-        3. 扣除本轮理智，判断剩余理智是否足够。
-        4. 点击“领取”，记录领取状态。
-
-        返回：
-            int: 扣掉本轮消耗理智后的剩余理智，如果理智不足则返回 0。
-        """
-        self.log_info(f"领取奖励,当前理智: {self.battle_ctx.left_ticket}, 本轮消耗理智: {self._battle_stage_cost}")
-        self.wait_ui_stable(refresh_interval=1)
-        start_time = self.active_time()
-
-        # 等待界面出现“可领取”
-        while not self.wait_feature(feature=fL.get_claim_page, time_out=1, raise_if_not_found=False):
-            if self.active_time() - start_time > 60:
-                return 0
-            self.press_key("f", down_time=0.2)
-            self.wait_ui_stable(refresh_interval=1)
-
-        # 本轮默认消耗理智
-        need_ticket_number = self._battle_stage_cost
-
-        # 尝试点击“获得奖励”，失败则本轮减少消耗理智
-        if not self.wait_click_feature(
+        base_cost = self._battle_stage_cost
+        double_cost = base_cost * 2
+        sanity = self.battle_ctx.left_ticket
+        if sanity < base_cost:
+            return 0
+        if sanity >= double_cost and self._select_double_reward(double_cost):
+            need_ticket_number = double_cost
+            self.log_info(f"Double Rewards selected. Sanity cost: {double_cost}")
+        elif self.wait_click_feature(
             feature=fL.battle_cost_x1,
             time_out=2,
             horizontal_variance=0.3,
             raise_if_not_found=False,
         ):
+            need_ticket_number = base_cost
+            self.log_info(f"Standard Rewards selected. Sanity cost: {base_cost}")
+        else:
             self.mark_task_failure("未找到 '获得奖励' 按钮, 任务失败")
-            return 0
+            return None
 
-        # 扣除本轮消耗理智
-        sum_ticket_number = self.battle_ctx.left_ticket - need_ticket_number
-        self.log_info(f"扣除本轮消耗理智: {need_ticket_number}, 剩余理智: {sum_ticket_number}")
-        if sum_ticket_number < 0:
-            return 0  # 理智不足，不能继续
-
-        # 点击“领取”，失败则返回0
         self.next_frame()
         if not self.wait_click_feature(
             feature=fL.skip_dialog_confirm,
             box=self.box_of_screen(0.627, 0.802, 0.670, 0.965),
             time_out=2,
             settle_time=1,
+            raise_if_not_found=False,
         ):
             self.mark_task_failure("领取失败")
-            return 0
-        # 预测下一轮是否还能继续
-        next_sum = sum_ticket_number - need_ticket_number
-        self.log_info(f"预测下一轮消耗理智: {need_ticket_number}, 预测下一轮剩余理智: {next_sum}")
-
-        if next_sum < 0:
-            self.log_info("下一轮理智不足，无法继续")
-            return 0
-        else:
-            # 返回本轮剩余理智，不返回next_sum，因为减耗只用于判断下一轮可否继续
-            return sum_ticket_number
+            return None
+        if not self.wait_until(
+            lambda: not self.find_one(feature=fL.get_claim_page), time_out=5, settle_time=0.3
+        ):
+            self.mark_task_failure("Reward claim screen did not close after confirmation")
+            return None
+        remaining = sanity - need_ticket_number
+        self.log_info(f"扣除本轮消耗理智: {need_ticket_number}, 剩余理智: {remaining}")
+        # A remaining balance below the double cost can still fund a standard run.
+        return remaining if remaining >= base_cost else 0
 
     def run(self):
         self.ensure_main(time_out=420)

@@ -23,6 +23,8 @@ from src.tasks.navigation.mixin.map_mixin import MapMixin
 from src.tasks.navigation.mixin.zip_line_mixin import ZipLineMixin
 
 _DIGITS_ONLY_RE = re.compile(r"^\d+$")
+_ENGLISH_CHANGE_GOODS = re.compile(r"\bgoods\b", re.IGNORECASE)
+_ENGLISH_GOODS_PICKER = re.compile(r"\bSelect\s+Goods\s+to\s+Trade\b", re.IGNORECASE)
 
 
 class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
@@ -141,7 +143,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         """据点内循环尝试更换货品并兑换。"""
         self.log_info(f"开始处理据点: {outpost_name}")
 
-        priority_list = priority_list or []
+        priority_list = parse_sequence_list(priority_list)
         excluded_goods = excluded_goods if excluded_goods is not None else set()
 
         if not self.wait_click_ocr(
@@ -151,23 +153,54 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         ):
             return False
 
-        self.wait_ocr(
-            match=self.lang.daily_routine_mixin.k_bb6c696b,
-            box=self.box_of_screen(1700 / 1920, 610 / 1080, 1, 710 / 1080),
-            time_out=5,
+        localized_goods = {
+            good: get_world_map_text(self.lang, good)
+            for good in get_goods_by_outpost_name(outpost_name)
+        }
+        can_exchange_goods = list(localized_goods.values())
+        priority_list = [localized_goods.get(item, item) for item in priority_list]
+        restrict_goods = only_priority_goods and bool(priority_list)
+        ticket_minimum = 1 if restrict_goods else 1000
+        english_priority_picker = restrict_goods and self.lang.locale == "en_US"
+        change_goods = (
+            _ENGLISH_CHANGE_GOODS if english_priority_picker else self.lang.daily_routine_mixin.k_bb6c696b
         )
-        can_exchange_goods = [
-            get_world_map_text(self.lang, good) for good in goods_dict.get(get_area_by_outpost_name(outpost_name), [])
-        ]
+        change_area = self.box_of_screen(1700 / 1920, 610 / 1080, 1, 710 / 1080)
+        self.wait_ocr(match=change_goods, box=change_area, time_out=5)
 
         goods_patterns = [
             re.compile(re.escape(get_world_map_text(self.lang, good)))
             for good in get_goods_by_outpost_name(outpost_name)
         ]
 
+        def priority_score(name):
+            """Match literal item names before trying configured regex rules."""
+            for index, pattern in enumerate(priority_list):
+                if pattern in can_exchange_goods:
+                    if pattern == name:
+                        return index
+                elif re.search(pattern, name):
+                    return index
+            return len(priority_list)
+
         def collect_goods():
             """采集并规范化当前帧货品；仅有界面杂项时返回空列表以继续等待。"""
             normalized_goods = []
+            if restrict_goods:
+                card_area = self.box_of_screen(0.135, 0.23, 0.86, 0.76)
+                labels = {name.casefold(): name for name in can_exchange_goods}
+                for good in self.ocr(box=card_area):
+                    name = labels.get(good.name.strip("|｜丨 ").casefold())
+                    if (
+                        name
+                        and name not in skip_goods
+                        and name not in excluded_goods
+                        and priority_score(name) < len(priority_list)
+                    ):
+                        good.name = name
+                        normalized_goods.append(good)
+                return normalized_goods
+
             for good in self.ocr():
                 good_name = good.name.strip("|｜丨")  # 清理 OCR 将卡片边框识别成的竖线。
                 # 单字即使与“息壤”等短货名只差一个字，也不作为货品。
@@ -204,47 +237,48 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         confirm_button = None
 
         num = self.read_outpost_ticket_num(outpost_name)
-        if num < 1000:
-            self.log_info(f"{outpost_name} 据点当前券数量不足 (<1000)，停止兑换")
+        if num < ticket_minimum:
+            self.log_info(f"{outpost_name} 据点当前券数量不足 (<{ticket_minimum})，停止兑换")
             max_attempts = 0
 
         for attempt in range(1, max_attempts + 1):
             self.log_info(f"尝试第 {attempt}/{max_attempts} 次更换货品")
-            if not change_button:
+            if restrict_goods or not change_button:
                 change_button = self.wait_click_ocr(
-                    match=self.lang.daily_routine_mixin.k_bb6c696b,
-                    box=self.box_of_screen(1700 / 1920, 610 / 1080, 1, 710 / 1080),
+                    match=change_goods,
+                    box=change_area,
                     time_out=5,
                 )
             else:
                 self.click(change_button)
-            self.wait_ocr(
-                match=self.lang.daily_routine_mixin.k_70b20820,
-                box=self.box.top_left,
+            picker_title = (
+                _ENGLISH_GOODS_PICKER if english_priority_picker
+                else self.lang.daily_routine_mixin.k_70b20820
+            )
+            picker = self.wait_ocr(
+                match=picker_title,
+                box=self.box_of_screen(0.12, 0.15, 0.60, 0.22) if restrict_goods else self.box.top_left,
                 time_out=5,
             )
+            if restrict_goods and (not change_button or not picker):
+                self.log_info(f"{outpost_name}: goods picker did not open")
+                return False
             # 标题、数量等文本不能提前结束等待，持续采集直到识别到候选货品。
-            normalized_goods = self.wait_until(collect_goods, time_out=5)
+            normalized_goods = self.wait_until(collect_goods, time_out=1 if restrict_goods else 5)
+            if restrict_goods and not normalized_goods:
+                # The picker can reopen with the previous scroll position.
+                for scroll in (8, -2, -2, -2, -2):
+                    self.scroll_relative(0.75, 0.65, scroll)
+                    self.wait_ui_stable(refresh_interval=0.3)
+                    normalized_goods = self.wait_until(collect_goods, time_out=1)
+                    if normalized_goods:
+                        break
 
             if not normalized_goods:
                 self.log_info(f"{outpost_name} 没有可兑换的货物")
+                if restrict_goods:
+                    self.back()
                 break
-
-            def priority_score(name):
-                """完整货名按字面量匹配优先序列，其余优先项沿用正则匹配。"""
-                for i, pattern in enumerate(priority_list):
-                    if pattern in can_exchange_goods:
-                        if pattern == name:
-                            return i
-                    elif re.search(pattern, name):
-                        return i
-                return len(priority_list)
-
-            if only_priority_goods and priority_list:
-                normalized_goods = [good for good in normalized_goods if priority_score(good.name) < len(priority_list)]
-                if not normalized_goods:
-                    self.log_info(f"{outpost_name} 没有匹配优先商品序列的可兑换货物")
-                    break
 
             normalized_goods.sort(key=lambda g: (priority_score(g.name), -len(g.name)))
 
@@ -267,14 +301,24 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
 
             self.log_info(f"选择货物进行兑换: {exchange_good.name}")
             self.click(exchange_good, after_sleep=0.1)
-            if not confirm_button:
+            if restrict_goods or not confirm_button:
                 confirm_button = self.wait_feature(feature=fL.select_confirm, time_out=5, raise_if_not_found=False)
                 if confirm_button:
                     self.click(confirm_button)
             else:
                 self.click(confirm_button)
-            self.wait_click_ocr(match=get_world_map_text(self.lang, outpost_name), box=self.box.top, time_out=5)
+            if restrict_goods and not (
+                confirm_button and self.wait_until(lambda: not self.find_one(fL.select_confirm), time_out=5)
+            ):
+                self.log_info(f"{outpost_name}: could not confirm selection of {exchange_good.name}")
+                return False
+            outpost = self.wait_click_ocr(match=get_world_map_text(self.lang, outpost_name), box=self.box.top, time_out=5)
+            if restrict_goods and not outpost:
+                return False
             if not self.plus_max():
+                if restrict_goods:
+                    self.log_info(f"{outpost_name}: maximum quantity unavailable for {exchange_good.name}")
+                    continue
                 excluded_goods.add(exchange_good.name)
                 self.log_info(f"货物不可交易，加入地区排除列表: {exchange_good.name}")
                 continue
@@ -289,6 +333,9 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
                 time_out=5,
                 raise_if_not_found=False,
             ):
+                if restrict_goods:
+                    self.log_info(f"{outpost_name}: sale button unavailable for {exchange_good.name}")
+                    continue
                 excluded_goods.add(exchange_good.name)
                 self.log_info(f"货物不可交易，加入地区排除列表: {exchange_good.name}")
                 continue
@@ -298,12 +345,13 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
 
             self.wait_pop_up()
             num = self.read_outpost_ticket_num(outpost_name)
-            if num < 1000:
-                self.log_info(f"{outpost_name} 据点当前券数量不足 (<1000)，停止兑换")
+            if num < ticket_minimum:
+                self.log_info(f"{outpost_name} 据点当前券数量不足 (<{ticket_minimum})，停止兑换")
                 break
 
-            excluded_goods.add(exchange_good.name)
-            self.log_info(f"货物已兑换完，加入地区排除列表: {exchange_good.name}")
+            if not restrict_goods:
+                excluded_goods.add(exchange_good.name)
+                self.log_info(f"货物已兑换完，加入地区排除列表: {exchange_good.name}")
 
         self.log_info(f"{outpost_name} 兑换操作完成")
 
@@ -314,11 +362,14 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         priority_list = self.config.get("交易货品优先序列", [])
         only_priority_goods = self.config.get("据点兑换仅购买优先商品", False)
         excluded_goods_by_area = {area: set() for area in areas_list}
+        completed = True
 
         for area in target_areas or areas_list:
             self.log_info(f"进入区域: {area}")
             if not self.to_model_area(area, "据点管理"):
                 self.log_info(f"无法进入{area}据点管理，据点兑换失败")
+                completed = False
+                continue
 
             outposts = outpost_dict.get(area, [])
             if not outposts:
@@ -331,12 +382,14 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
 
             for outpost_name in outposts:
                 self.log_info(f"开始兑换据点: {outpost_name}")
-                self.perform_outpost_exchange(
+                result = self.perform_outpost_exchange(
                     outpost_name,
                     priority_list,
                     excluded_goods_by_area[area],
                     only_priority_goods,
                 )
+                if result is False:
+                    completed = False
                 self.log_info(f"完成兑换据点: {outpost_name}")
 
             self.log_info(f"{area} 区域据点兑换完成")
@@ -346,7 +399,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
                 self.ensure_main()
 
         self.log_info("据点兑换任务完成")
-        return True
+        return completed
 
     def _get_outpost_trade_limit(self, good_name, tickets):
         """返回活动货品的券余额对应数量；None 表示普通货品。

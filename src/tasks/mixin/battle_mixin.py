@@ -1659,6 +1659,7 @@ class BattleMixin(BaseEfTask):
             self.find_feature(feature=fL.b)
             or self.find_feature(feature=fL.battle_space_ok)
             or self.find_feature(feature=fL.battle_gather_ok)
+            or self.find_feature(feature=fL.get_claim_page)
             or self.find_feature(feature=fL.restart_battle)
             or self.find_feature(feature=fL.restart_battle, box=self.box_of_screen(0.550, 0.896, 0.574, 0.943))
         )

@@ -1,5 +1,10 @@
+import sys
 import traceback
+from contextlib import contextmanager
 from math import isfinite
+from threading import Event
+
+from ok import TaskDisabledException
 
 from src.config import config as app_config
 from src.core.BaseEfTask import BaseEfTask
@@ -23,6 +28,43 @@ from src.data.skill_rotation import (
 )
 from src.image.recommend_skill_detector import get_recommend_skill_detector
 from src.tasks.onetime.TimedCombatLogic import TimedCombatLogic
+
+
+@contextmanager
+def combat_stop_hotkey(task):
+    """Listen for a manual abort while an automated fight owns the executor."""
+    executor = getattr(task, "executor", None)
+    owner = getattr(executor, "current_task", None)
+    if sys.platform != "win32" or owner is None:
+        yield
+        return
+
+    from pynput.keyboard import GlobalHotKeys
+
+    stopped = Event()
+
+    def stop_combat():
+        if stopped.is_set() or executor.current_task is not owner:
+            return
+        stopped.set()
+        owner.disable()
+        owner.unpause()
+        for trigger in executor.trigger_tasks:
+            if trigger is not owner and type(trigger).__name__ == "AutoCombatTask" and trigger.enabled:
+                trigger.disable()
+        task.log_info("Alt+A pressed. Automated combat stopped for manual control.")
+
+    def physical_key_only(_message, data):
+        return not data.flags & 0x10  # LLKHF_INJECTED
+
+    listener = GlobalHotKeys({"<alt>+a": stop_combat}, win32_event_filter=physical_key_only)
+    listener.start()
+    try:
+        yield
+    finally:
+        listener.stop()
+    if stopped.is_set():
+        raise TaskDisabledException()
 
 
 class _TaskProbe:
@@ -494,7 +536,8 @@ class AutoCombatLogic:
             task.sleep(0.5)
             return False
 
-        return self._run_confirmed_combat(burst_delay, no_battle, deadline)
+        with combat_stop_hotkey(task):
+            return self._run_confirmed_combat(burst_delay, no_battle, deadline)
 
     @without_learning("battle")
     def _run_confirmed_combat(self, burst_delay, no_battle, deadline):
@@ -688,6 +731,8 @@ class AutoCombatLogic:
                         break
                 else:
                     self._do_normal_combat_frame()
+        except TaskDisabledException:
+            raise
         except Exception as exc:
             task.log_info(f"自动战斗发生异常: {exc}")
             task.log_info(traceback.format_exc())

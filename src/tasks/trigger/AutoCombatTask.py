@@ -36,7 +36,24 @@ class AutoCombatTask(BattleMixin, TriggerTask):
         )
 
         self._combat_logic = AutoCombatLogic(self)
+        self._awaiting_clear_combat_hud = False
+        self._combat_hud_clear_since = None
 
     def run(self):
         self.check_resolution()
-        self._combat_logic.run()
+        if self.is_battle_settlement():
+            self._combat_hud_clear_since = None
+        elif self._awaiting_clear_combat_hud:
+            if self.in_combat():
+                self._combat_hud_clear_since = None
+            elif self._combat_hud_clear_since is None:
+                self._combat_hud_clear_since = self.active_time()
+            elif self.active_time() - self._combat_hud_clear_since >= 0.75:
+                self._awaiting_clear_combat_hud = False
+                self._combat_hud_clear_since = None
+        else:
+            # The old skill bar and squad portraits can outlive the result screen.
+            if self._combat_logic.run():
+                self._awaiting_clear_combat_hud = True
+            return
+        self.sleep(0.5)

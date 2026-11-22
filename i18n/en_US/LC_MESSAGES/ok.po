@@ -518,10 +518,7 @@ msgid "启用后将只进行购买操作，不进行出售操作。"
 msgstr "When enabled, only purchase, no selling."
 
 msgid "启用后，仅当「交易货品优先序列」不为空时，据点兑换才只购买其中的商品；序列为空时按原逻辑兑换。"
-msgstr ""
-"When enabled, stronghold exchange only buys items in the \"Trading Goods "
-"Priority List\" when it is not empty; if the list is empty, the original "
-"exchange logic is used."
+msgstr "Outpost Exchange trades only goods in the Trade Goods Priority Sequence when the list has items. An empty list uses the default trade rules."
 
 msgid "启用实时条件"
 msgstr "Enable Real-Time Conditions"
@@ -843,7 +840,7 @@ msgid "据点兑换"
 msgstr "Outpost Exchange"
 
 msgid "据点兑换仅购买优先商品"
-msgstr "Stronghold Exchange Buys Priority Goods Only"
+msgstr "Trade Priority Goods Only"
 
 msgid "排轴序列"
 msgstr "Skill Rotation Sequence"
@@ -3966,3 +3963,75 @@ msgstr "Brake early within this distance of a waypoint. For small corrections wi
 #: src/patches/endfield_theme_patch.py
 msgid "插件"
 msgstr "Plugins"
+
+msgid "使用独立地区配置"
+msgstr "Use Task-Specific Regions"
+
+msgid "勾选后使用当前任务的独立地区范围，否则使用全局地区配置。"
+msgstr "Use a separate region selection for this task. Turn this off to use the global region settings."
+
+msgid "地区范围模式"
+msgstr "Region Selection Mode"
+
+msgid "地区列表"
+msgstr "Regions"
+
+msgid "排除所选地区"
+msgstr "Exclude Selected Regions"
+
+msgid "仅执行所选地区"
+msgstr "Run Only in Selected Regions"
+
+msgid "「排除所选地区」会执行当前及未来新增的全部地区，但跳过列表中的地区；「仅执行所选地区」只执行列表中的地区。"
+msgstr "Exclude Selected Regions runs in all current and future regions except those listed. Run Only in Selected Regions limits the task to the regions listed."
+
+msgid "选择要排除或仅执行的地区；地区列表由当前主数据自动生成。"
+msgstr "Select the regions to include or exclude, according to the selected mode."
+
+msgid "全局地区执行范围"
+msgstr "Global Region Selection"
+
+msgid "精选柑实罐头"
+msgstr "Canned Citrome [A]"
+
+msgid "中容谷地电池"
+msgstr "SC Valley Battery"
+
+msgid "优质荞愈胶囊"
+msgstr "Buck Capsule [B]"
+
+msgid "优质柑实罐头"
+msgstr "Canned Citrome [B]"
+
+msgid "柑实罐头"
+msgstr "Canned Citrome [C]"
+
+msgid "晶体外壳"
+msgstr "Origocrust"
+
+msgid "重息壤龙泡泡"
+msgstr "Heavy Xiranite Chubby Lung"
+
+msgid "息壤龙泡泡"
+msgstr "Xiranite Chubby Lung"
+
+msgid "息壤玉葫芦"
+msgstr "Xiranite Jade Gourd"
+
+msgid "息壤葫芦"
+msgstr "Xiranite Gourd"
+
+msgid "优质锦草软饮"
+msgstr "Jincao Tea"
+
+msgid "低容武陵电池"
+msgstr "LC Wuling Battery"
+
+msgid "芽针针剂"
+msgstr "Yazhen Syringe [C]"
+
+msgid "锦草软饮"
+msgstr "Jincao Drink"
+
+msgid "灼铜零件"
+msgstr "Pyrrolite Part"
