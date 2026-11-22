@@ -1,250 +1,164 @@
 <p align="center">
-  <img 
-    src="icons/icon.png"
-    alt="ok-ef game automation tool logo"
-    width="256"
-    height="256"
-  />
+  <img src="icons/icon.png" alt="OK-Endfield logo" width="256" height="256" />
 </p>
 
-<h1 align="center">ok-ef</h1>
+# OK-Endfield — Global Language Fixes
 
-<p>
-一个基于图像识别的终末地自动化程序，部分功能支持后台运行（不完全支持，涉及键盘操作的部分暂不支持），基于 <a href="https://ok-script.com/">ok-script</a> 开发。
-<br />
-An image-recognition-based automation tool for End Field, with partial background mode support (keyboard-operated actions are not supported in the background), developed with <a href="https://ok-script.com/">ok-script</a>.
-</p>
+An unofficial fork of [AliceJump/ok-end-field](https://github.com/AliceJump/ok-end-field) focused on making OK-Endfield work with the English interface of the global version of **Arknights: Endfield**. The tool automates parts of the game through screen recognition and simulated Windows inputs. Background support is partial, and keyboard-controlled actions may need the game window to be active.
 
-<p><i>通过模拟 Windows 用户接口进行操作，无内存读取、无文件修改</i></p>
-
-<p align="center">
-  <a href="https://ok-script.com/ok-end-field/">
-    <img src="https://img.shields.io/badge/官网文档-在线站点-1aa6a9" alt="官网/文档">
-  </a>
-</p>
-
-<!-- Badges -->
-<div align="center">
-
-![平台](https://img.shields.io/badge/platform-Windows-blue)
-[![GitHub release](https://img.shields.io/github/v/release/alicejump/ok-end-field)](https://github.com/alicejump/ok-end-field/releases)
-[![总下载量](https://img.shields.io/github/downloads/alicejump/ok-end-field/total)](https://github.com/alicejump/ok-end-field/releases)
-[![Discord](https://img.shields.io/discord/296598043787132928?color=5865f2&label=%20Discord)](https://discord.gg/vVyCatEBgA)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)](#requirements)
+[![Upstream release](https://img.shields.io/github/v/release/AliceJump/ok-end-field)](https://github.com/AliceJump/ok-end-field/releases)
+[![Upstream downloads](https://img.shields.io/github/downloads/AliceJump/ok-end-field/total)](https://github.com/AliceJump/ok-end-field/releases)
+[![Upstream Discord](https://img.shields.io/discord/296598043787132928?color=5865f2&label=Discord)](https://discord.gg/vVyCatEBgA)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/AliceJump/ok-end-field)
 
-</div>
+## What this fork changes
 
-## Downloads
+- Enables the English OCR matchers. The Wuling City farming route recognizes **Index → Energy Alluvium** even when the English category label wraps onto two lines.
+- Makes auto-combat release the attack button when an end-of-combat signal appears and wait for confirmation before exiting.
+- Adds **Daily Tasks → Battle → Burst delay (seconds)**. Basic attacks and target search can start immediately, while the skill rotation waits for the chosen delay. The default is zero.
 
-![downloads](./.github/stats/downloads.svg)
+English coverage varies by task. The OCR and combat changes were checked on saved frames or in simulations. The complete Wuling harvest still needs an in-game check.
 
-### [English Readme](README_en.md) | 中文说明
+## Quick start
 
----
+The fork's changes are available in its source code. Follow [Run from source](#run-from-source) below to use them.
 
-**演示与教程:**
+For the original version, download the Global Windows installer from [upstream GitHub Releases](https://github.com/AliceJump/ok-end-field/releases), run the setup wizard, and launch **ok-ef** from the Start menu or desktop shortcut. Look for a `setup.exe` release asset. GitHub's automatically generated source archives do not contain a Windows installer.
 
-[![Bilibili](https://img.shields.io/badge/Bilibili-%2300A1D6.svg?style=for-the-badge&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV16PPszhEwN/)
+### Upstream download sources
 
----
+- [GitHub Releases](https://github.com/AliceJump/ok-end-field/releases)
+- [MirrorChyan](https://mirrorchyan.com/zh/projects?rid=ok-end-field&source=ok-ef-readme), a regional mirror that may require a platform key
+- [Baidu Netdisk and Quark Netdisk](https://github.com/AliceJump/ok-end-field#-%E4%B8%8B%E8%BD%BD%E6%B8%A0%E9%81%93), free mirrors listed by the upstream project
 
-## ⚠️ 免责声明
+[Upstream download statistics](./.github/stats/downloads.svg) · [Documentation](https://ok-script.com/ok-end-field/) · [Demo and tutorial on Bilibili](https://www.bilibili.com/video/BV16PPszhEwN/) · [English tutorial on YouTube](https://youtu.be/h6P1KWjdnB4)
 
-本软件为外部辅助工具，旨在自动化《终末地》的部分游戏流程。它完全通过模拟常规用户界面与游戏交互，遵循相关法律法规。本项目旨在简化用户的重复性操作，不会破坏游戏平衡或提供不公平优势，也绝不会修改任何游戏文件或数据。
+## Disclaimer
 
-本软件开源、免费，仅供个人学习与交流使用，请勿用于任何商业或营利性目的。开发者团队拥有本项目的最终解释权。因使用本软件而产生的任何问题，均与本项目及开发者无关。
+This is an external tool for automating repetitive steps in Arknights: Endfield. The features described here use on-screen recognition and ordinary Windows input. The project is open source and free, and its upstream README describes it as intended for personal learning and exchange. See the [license](LICENSE) for the applicable terms.
 
-请注意，根据鹰角官方的《终末地》公平运营声明：
-> 严禁利用任何第三方工具破坏游戏体验。
-> 我们将严厉打击使用外挂、加速器、作弊软件、宏脚本等违规工具的行为，这些行为包括但不限于自动挂机、技能加速、无敌模式、瞬移、修改游戏数据等操作。
-> 一经查证，我们将视违规情况和次数，采取包括但不限于扣除违规收益、冻结或永久封禁游戏账号等措施。
+The game's fair-play notice warns that using unauthorized third-party tools such as bots, macros, and cheats can lead to forfeiture of rewards, suspension, or a permanent ban. Use the tool at your own risk and check the game's current rules. The game name and trademarks belong to their respective owners.
 
-**使用本软件即表示您已阅读、理解并同意以上声明，并自愿承担一切潜在风险。**
+## Requirements
 
-## 🚀 快速开始
+- Windows with a 16:9 game resolution of at least **1600 × 900**.
+- A stable **60 FPS** is recommended for combat and navigation.
+- Use a simple installation path such as `D:\Games\ok-ef`. Avoid paths with non-ASCII characters and protected folders such as `C:\Program Files`.
+- The upstream project recommends running as administrator and requires elevation for its source workflow.
+- Set the app and game to the same language. Some upstream tasks still rely on Simplified Chinese labels.
 
-1. **下载安装包**：从下方的“下载渠道”中选择一个，下载最新的 `ok-ef-win32-China-setup.exe` 安装文件。
-2. **安装程序**：双击 `ok-ef-win32-China-setup.exe` 文件，并按照安装向导的提示完成安装。
-3. **运行程序**：安装完成后，从桌面快捷方式或开始菜单启动 `ok-ef` 即可。
+## Features
 
-## 📥 下载渠道
+### One-time tasks
 
-* **[GitHub](https://github.com/alicejump/ok-end-field/releases)**: 官方发布页，全球访问速度快。（**请下载 `setup.exe`
-  安装包，而不是 `Source Code` 源码压缩包**）
-* **[Mirror酱](https://mirrorchyan.com/zh/projects?rid=ok-end-field&source=ok-ef-readme)**: 国内镜像，下载可能需要购买其平台的
-  CD-KEY。
-*  **[百度网盘](https://pan.baidu.com/s/1rxLRLkSx34xIL-nGib04sg?pwd=479z)**: 免费下载
-*  **[夸克网盘](https://pan.quark.cn/s/24433f3febc1)**: 免费下载
+- [Daily Tasks](docs/en/daily-tasks.md) covers gifts, outpost exchanges, delivery requests, trading, Sanity farming, and reward collection.
+- [Sanity Farming](docs/en/stamina-farming.md) supports standard and higher-tier stages, Crisis stages, and Energy Alluvium, with skill rotations and stage sequences.
+- [Delivery Request Pickup](docs/en/delivery-pickup.md) filters requests by credit type and amount.
+- [Auto Delivery](docs/en/auto-delivery.md) picks up and delivers Wuling requests worth 73,100, 79,800, 119,000, 159,000, or 163,000 credits.
+- [Warehouse Transfer](docs/en/warehouse-transfer.md) moves selected items between warehouses in bulk.
+- **Calculation card draws** repeat at the arena until the configured level-change condition is met.
+- **Umbral Monument** automates currently available normal stages.
+- **Launch Game Once** can be scheduled to start and check the game. The 120-second value is the timeout for reaching the main screen. By default the task exits 15 seconds after reaching it.
+- **Real-time detection** runs YOLO continuously for diagnostics. Other development tools include periodic screenshots and framework diagnostics. The older endgame essence recognition task has been removed upstream.
 
+### Trigger tasks
 
-## 运行要求与推荐设置
+- [Auto-combat](docs/en/auto-combat.md) detects combat and runs skill sequences.
+- **Auto Interaction** skips supported story dialogs and selects teleport actions on the map.
+- **Auto Pickup** uses allowlists and denylists.
+- [Item Navigation](docs/en/item-navigation.md) uses the shared `world.pose` position to point toward the nearest gathering location.
 
-- 系统：Windows
-- 游戏分辨率：要求 16:9 且 1600×900（900P）及以上；低于 900P 不保证正常运行
-- 语言：当前部分功能仅支持简体中文
-- 运行权限：建议管理员权限运行（源码模式必须）
-- 路径：安装/运行路径尽量使用纯英文
-- 帧率：推荐稳定 60 FPS，用于战斗和导航任务
+### Scheduled tasks
 
----
+Daily Tasks, Auto Delivery, Umbral Monument, and Launch Game Once support the built-in scheduler. [Windows Task Scheduler](docs/en/windows-task-scheduler.md) can run any registered one-time task.
 
+The framework also provides OCR, template matching, HSV color detection, input simulation, logging, error handling, and task scheduling.
 
-## 功能一览（按任务类型）
+## Troubleshooting
 
-### 一次性任务（手动点击执行）
-- [日常任务](docs/zh-CN/日常任务.md)：送礼、据点兑换、委托处理、买卖货、刷体力、奖励领取等一条龙
-- [刷体力](docs/zh-CN/体力本.md)：普通/高阶/危境/能量淤积点，支持排轴和刷本序列
-- [运送委托接取](docs/zh-CN/运送委托接取.md)：按券种与金额筛选并自动抢单
-- [自动送货](docs/zh-CN/自动送货.md)：武陵委托自动接取与送货路径执行，支持 7.31w/7.98w/11.9w/15.9w/16.3w 券数
-- [仓库物品转移](docs/zh-CN/仓库物品转移.md)：跨仓库批量转移指定物品
-- 演算抽牌：在演武台前循环抽牌，满足等级变化条件后停止
-- 影拓丰碑：自动完成当前所有普通影拓丰碑关卡
-- `启动一次游戏,120s后自动关闭`：当前注册的可见任务名；供计划任务提前启动并检查游戏，其中 `120s` 是进入主页的超时，实际默认在回到主页后等待 15 秒再退出
-- 实时检测：循环执行 YOLO 检测，用于模型调试
-- 测试、诊断：开发调试与框架诊断工具
+1. Use a simple installation path and confirm that the app can access the game window.
+2. If antivirus software quarantines a file, verify that it came from a trusted release before deciding whether to allow it.
+3. Use the game's default brightness. Turn off GPU filters, extra sharpening, and overlays such as MSI Afterburner or Fraps unless a guide for the feature calls for them.
+4. Mirror any custom in-game keybindings in the tool's settings. Only listed hotkeys are supported.
+5. Check that you are running the intended version. To use the changes described here, run this fork's source.
+6. If the frame rate is unstable, lower the game's graphics settings while keeping the supported resolution.
+7. If the game repeatedly disconnects, try starting it manually and letting it run for five minutes before launching the tool. After a disconnect, try signing back in before closing it.
+8. When reporting a problem, include the task, game language, version, and steps to reproduce. Remove player identifiers and other account information from any logs or screenshots you choose to share.
+9. Consult [upstream troubleshooting](docs/en/guides/troubleshooting.md) for task-specific setup and limitations.
 
-> `PeriodicScreenshotTask`（定时截图）等调试/测试任务已注册到一次性任务列表；历史“毕业基质识别”任务已移除。
+## Maintenance documentation
 
-### 触发式任务（后台循环检测，不完全支持）
-- [自动战斗](docs/zh-CN/自动战斗.md)：检测战斗状态并按技能序列自动释放
-- 自动交互：自动跳过剧情并点击地图传送
-- 自动拾取：白名单拾取 + 黑名单过滤
-- [物品导航](docs/zh-CN/物品导航与实时检测.md)：通过共享 `world.pose` 实时坐标指向最近采集点
+The guides below are upstream documents and may be in Chinese.
 
-### 定时任务
-- 日常任务、自动送货、影拓丰碑和“`启动一次游戏,120s后自动关闭`”声明支持内置计划任务
-- 也可参照 [Windows 计划任务](docs/zh-CN/Windows%20计划任务.md) 调用任意已注册的一次性任务
+| Guide | Contents |
+| --- | --- |
+| [Auto Delivery maintenance](docs/update/%E9%80%81%E8%B4%A7%E5%9C%B0%E5%8C%BA%E7%BB%B4%E6%8A%A4%E5%B7%A5%E4%BD%9C%E6%B5%81.md) | Delivery regions, templates, and validation |
+| [Daily gifting maintenance](docs/update/%E6%97%A5%E5%B8%B8%E9%80%81%E7%A4%BC%E7%BB%B4%E6%8A%A4%E5%B7%A5%E4%BD%9C%E6%B5%81.md) | Operator data and interaction templates |
+| [Master data maintenance](docs/update/%E4%B8%BB%E6%95%B0%E6%8D%AE%E7%BB%B4%E6%8A%A4%E5%B7%A5%E4%BD%9C%E6%B5%81.md) | World regions, stages, and item data |
 
-### 辅助能力
-- OCR 识别、模板匹配、HSV 颜色识别
-- UI 自动化、按键模拟
-- 日志、异常处理、流程调度
+## Development
 
-## 🔧 疑难解答 (Troubleshooting)
+| Guide | Contents |
+| --- | --- |
+| [Quick start](docs/dev/QUICKSTART.md) | Run from source and add trigger or one-time tasks |
+| [Development guide](docs/dev/DEVELOPMENT.md) | Architecture, task registration, tests, and releases |
+| [API reference](docs/dev/API.md) | `BaseEfTask`, mixins, screen positions, and key configuration |
+| [Localization and OCR](docs/dev/i18n_OCR%E9%85%8D%E7%BD%AE%E6%B5%81%E7%A8%8B.md) | Runtime language, matcher data, and OCR corrections |
+| [Keyboard input](docs/dev/%E9%94%AE%E7%9B%98%E6%93%8D%E4%BD%9C%E4%BD%93%E7%B3%BB.md) | Hotkey mapping and input conventions |
 
-如果遇到问题，请在提问前按以下步骤逐一排查：
+### Run from source
 
-1. **安装路径**：请确保软件安装在**纯英文路径**下（例如 `D:\Games\ok-ef`），不要安装在 `C:\Program Files` 或包含中文字符的文件夹中。
-2. **杀毒软件**：将软件的安装目录添加到您的杀毒软件（包括 Windows Defender）的**信任区或白名单**中，以防文件被误删或拦截。
-3. **显示设置**：
-    * 关闭所有显卡滤镜（如 NVIDIA Game Filter）和锐化功能，除非部分功能要求。
-    * 使用游戏默认的亮度设置。
-    * 关闭任何在游戏画面上显示信息的叠加层（如 MSI Afterburner、Fraps 等显示的帧率）。
-4. **自定义按键**：如果您修改了游戏内的默认按键，请务必在 `ok-ef` 的设置中进行同步配置。仅支持设置中列出的按键。
-5. **软件版本**：检查并确保您使用的是最新版本的 `ok-ef`。
-6. **游戏性能**：请确保游戏能稳定在 **60 FPS** 运行。如果帧率不稳定，请尝试降低游戏画质或分辨率。
-7. **游戏断线**：如频繁遇到与服务器断开连接的问题，可以尝试先手动打开游戏运行5分钟后再启动本工具，或在断线后直接重新登录，不要退出游戏。
-8. **寻求帮助**：如果以上步骤都无法解决您的问题，请通过社区渠道提交详细的错误报告。
-9. **游戏/软件语言** 本软件目前部分功能仅支持简体中文，不支持其他语言。
+Use Python 3.12 and [uv](https://docs.astral.sh/uv/). On Windows, run the following from an elevated PowerShell session.
 
----
-
-## 🛠 维护区
-
-### 维护文档
-
-| 文档 | 说明 |
-|------|------|
-| [自动送货维护工作流](docs/update/送货地区维护工作流.md) | 新增或调整送货地区时使用；说明如何维护地区数据、模板资源与验证步骤 |
-| [日常送礼维护工作流](docs/update/日常送礼维护工作流.md) | 新增角色联络或礼物赠送功能时使用；说明如何添加角色数据与接触模板 |
-| [主数据维护工作流](docs/update/主数据维护工作流.md) | 新增或调整游戏区域、关卡、商品数据时使用；说明所有世界数据结构的维护方法 |
-
----
-
-## 💻 开发者专区
-
-### 开发者文档
-
-| 文档 | 说明 |
-|------|------|
-| [快速开始（QUICKSTART.md）](docs/dev/QUICKSTART.md) | 从源码运行项目、启动软件、新建触发式/一次性任务的最简流程 |
-| [开发指南（DEVELOPMENT.md）](docs/dev/DEVELOPMENT.md) | 架构、目录、任务注册、测试和发布流程 |
-| [API 参考（API.md）](docs/dev/API.md) | BaseEfTask、Mixin、ScreenPosition、KeyConfigManager 等详细 API |
-| [i18n 与 OCR 配置流程](docs/dev/i18n_OCR配置流程.md) | 运行时语言、语言 JSON、OCR 匹配与纠错链路 |
-| [键盘操作体系（键盘操作体系.md）](docs/dev/键盘操作体系.md) | 热键映射、按键封装规范、send_key 例外清单 |
-
-### 从源码运行 (Python)
-
-本项目仅支持 Python 3.12 版本, 必须以管理员权限启动CMD, PyCharm, VSCode。依赖管理使用 [uv](https://docs.astral.sh/uv/)（需先安装 uv）。
-
-```bash
-# 若首次 clone 未带子模块参数，请先执行
-git submodule update --init --recursive
-
-# 创建虚拟环境并安装/更新依赖
-uv sync
-
-# 运行 Release 版本
-uv run python main.py
-
-# 运行 Debug 版本
-uv run python main_debug.py
+```powershell
+git clone --recurse-submodules https://github.com/angelika3377/ok-end-field-global.git
+Set-Location ok-end-field-global
+uv sync --locked
+uv run --locked python main.py
 ```
 
-### 命令行参数
+If the checkout already exists, run `git submodule update --init --recursive` from its root. For debug mode, use `uv run --locked python main_debug.py`.
 
-您可以通过命令行参数实现自动化启动。
+### Command-line arguments
 
-``` pwsh
-# 启动后自动执行第1个任务『日常任务』，并在任务完成后退出程序
+```powershell
 ok-ef.exe -t 1 -e
 ```
 
-* `-t` 或 `--task`: 启动后自动执行第N个任务。`1` 代表任务列表（文件 [./src/config.py](./src/config.py) 列表 `onetime_tasks`）中的第1个（也就是『日常任务』）。
-* `-e` 或 `--exit`: 任务执行完毕后自动退出程序。
+- `-t` or `--task` runs the specified one-time task at startup. Task 1 is Daily Tasks in the [task list](src/config.py).
+- `-e` or `--exit` closes the app after the task finishes.
 
-### 开发调试与测试
+### Debugging and tests
 
-```bash
-# 执行 tests/ 下全部测试脚本（PowerShell）
+```powershell
 ./scripts/testing/run_tests.ps1
-
-# 或逐个运行 unittest
-python -m unittest tests/TestGameWindow.py
+uv run --locked python -m unittest tests.TestGameWindow
 ```
 
-若你在开发“识别类任务”（OCR/模板/颜色识别），建议优先在 `main_debug.py` 下调试，配合日志与截图目录排查。
+For OCR, template, and color-recognition issues, use `main_debug.py` and inspect the relevant local logs and screenshots.
 
-## 💬 加入我们
+## Upstream community
 
-* **QQ 交流群**: `940581952` (入群答案: `终末地`)
-* **QQ 频道**: [点击加入](https://pd.qq.com/s/djmm6l44y) (群满或获取最新资讯)
-* **开发者群**: `1079581542` ( **注意**:
-  此群仅面向有开发能力、拥有Github账号、希望参与贡献的开发者，入群前请确保您已能够从源码成功运行项目。)
+[Discord](https://discord.gg/vVyCatEBgA) · [QQ Channel](https://pd.qq.com/s/djmm6l44y) · [QQ user and developer groups](https://github.com/AliceJump/ok-end-field#-%E5%8A%A0%E5%85%A5%E6%88%91%E4%BB%AC)
 
-本项目基于 [ok-script](https://ok-script.com/)
-框架开发，简单易维护。欢迎有兴趣的开发者使用 [ok-script](https://ok-script.com/) 开发您自己的自动化项目。
+The upstream developer group is intended for contributors with a GitHub account who can already run the project from source. The [ok-script](https://ok-script.com/) framework can also be used to build other automation projects.
 
-## 🔗 使用ok-script的项目：
+## Other projects using ok-script
 
-* 终末地 [https://github.com/AliceJump/ok-end-field](https://github.com/AliceJump/ok-end-field)
-* 鸣潮 [https://github.com/ok-oldking/ok-wuthering-waves](https://github.com/ok-oldking/ok-wuthering-waves)
-* 鸣潮(日常一条龙-优化版) [https://github.com/zzc-tongji/ok-ww-enhanced](https://github.com/zzc-tongji/ok-ww-enhanced)
-* 原神(停止维护,
-  但是后台过剧情可用) [https://github.com/ok-oldking/ok-genshin-impact](https://github.com/ok-oldking/ok-genshin-impact)
-* 少前2 [https://github.com/ok-oldking/ok-gf2](https://github.com/ok-oldking/ok-gf2)
-* 星铁 [https://github.com/Shasnow/ok-starrailassistant](https://github.com/Shasnow/ok-starrailassistant)
-* 星痕共鸣 [https://github.com/Sanheiii/ok-star-resonance](https://github.com/Sanheiii/ok-star-resonance)
-* 二重螺旋 [https://github.com/BnanZ0/ok-duet-night-abyss](https://github.com/BnanZ0/ok-duet-night-abyss)
-* 异环 [https://github.com/BnanZ0/ok-nte](https://github.com/BnanZ0/ok-nte)
-* 卡厄思梦境 [https://github.com/baoxin1100/ok-kes](https://github.com/baoxin1100/ok-kes)
-* 白荆回廊(停止更新) [https://github.com/ok-oldking/ok-baijing](https://github.com/ok-oldking/ok-baijing)
+- [Arknights: Endfield](https://github.com/AliceJump/ok-end-field)
+- [Wuthering Waves](https://github.com/ok-oldking/ok-wuthering-waves) and [its enhanced daily-task fork](https://github.com/zzc-tongji/ok-ww-enhanced)
+- [Genshin Impact](https://github.com/ok-oldking/ok-genshin-impact), unmaintained upstream, with background story skipping
+- [Girls' Frontline 2: Exilium](https://github.com/ok-oldking/ok-gf2)
+- [Honkai: Star Rail](https://github.com/Shasnow/ok-starrailassistant)
+- [Blue Protocol: Star Resonance](https://github.com/Sanheiii/ok-star-resonance)
+- [Duet Night Abyss](https://github.com/BnanZ0/ok-duet-night-abyss)
+- [Neverness to Everness](https://github.com/BnanZ0/ok-nte)
+- [Chaos Zero Nightmare](https://github.com/baoxin1100/ok-kes)
+- [Ash Echoes](https://github.com/ok-oldking/ok-baijing), unmaintained upstream
 
-## ❤️ 赞助与致谢
+## Acknowledgements
 
-### 贡献者
+Thanks to [AliceJump](https://github.com/AliceJump) and the [OK-Endfield contributors](https://github.com/AliceJump/ok-end-field/graphs/contributors) for the original project, and to [ok-oldking](https://github.com/ok-oldking) and the [ok-script](https://ok-script.com/) contributors for the framework.
 
-<a href="https://github.com/AliceJump/ok-end-field/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=AliceJump/ok-end-field" />
-</a>
-
-### 赞助商 (Sponsors)
-
-* **EXE 签名**: Free code signing provided by [SignPath.io](https://signpath.io/), certificate
-  by [SignPath Foundation](https://signpath.org/).
-
-### 致谢
-
-* [ok-oldking/OnnxOCR](https://github.com/ok-oldking/OnnxOCR)
-* [zhiyiYo/PyQt-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)
-* [Toufool/AutoSplit](https://github.com/Toufool/AutoSplit)
+The upstream project also credits [OnnxOCR](https://github.com/ok-oldking/OnnxOCR), [PyQt-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets), and [AutoSplit](https://github.com/Toufool/AutoSplit). Upstream Windows binaries receive code-signing support from [SignPath.io](https://signpath.io/) with a certificate from the [SignPath Foundation](https://signpath.org/).

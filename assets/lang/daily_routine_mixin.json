@@ -1201,6 +1201,9 @@
     },
     "zh_TW": {
       "pattern": "豐碑"
+    },
+    "en_US": {
+      "pattern": "Umbral Monument"
     }
   },
   "k_view_quote": {
@@ -1253,6 +1256,9 @@
     },
     "zh_TW": {
       "pattern": "影拓|活動期間|普通模式"
+    },
+    "en_US": {
+      "pattern": "Umbral Monument|During the Event|Normal Mode"
     }
   },
   "k_ebbfb983": {
@@ -1261,6 +1267,9 @@
     },
     "zh_TW": {
       "pattern": "苦難"
+    },
+    "en_US": {
+      "pattern": "Hardship"
     }
   }
 }

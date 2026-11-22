@@ -850,18 +850,25 @@ class BattleTask(Common, MapMixin, ZipLineMixin, BattleMixin):
         3. 点击对应按钮（“前往”或“查看”）。
         4. 自动支持普通关卡和高阶关卡（危境预演）。
         """
-        # 点击左侧关卡类别
-        self.wait_click_ocr(
-            match=get_world_map_matcher(self.lang, self.battle_ctx.category_name),
-            box=self.box.left,
+        is_gather = is_world_map_text(self.lang, self.battle_ctx.category_name, STAGE_CATEGORY_ENERGY_POOLING)
+        category_match = get_world_map_matcher(self.lang, self.battle_ctx.category_name)
+        category_box = self.box.left
+        if is_gather:
+            category_box = self.box_of_screen(0.12, 0.31, 0.31, 0.84)
+            if self.lang.locale == "en_US":
+                # The English sidebar can wrap Energy Alluvium onto two OCR lines.
+                category_match = [category_match, re.compile(r"^Alluvium$", re.IGNORECASE)]
+        category_clicked = self.wait_click_ocr(
+            match=category_match,
+            box=category_box,
             log=True,
             time_out=6,
         )
+        if is_gather and not category_clicked:
+            self.log_info("未找到能量淤积点分类，停止进入关卡")
+            return False
 
-        # 默认按钮文本
-        to_text = fL.go_space
-        if is_world_map_text(self.lang, self.battle_ctx.category_name, STAGE_CATEGORY_ENERGY_POOLING):
-            to_text = fL.go_gather_view
+        to_text = fL.go_gather_view if is_gather else fL.go_space
         # 判断是否是高阶关卡
         is_higher_order = is_world_map_text(self.lang, self.battle_ctx.category_name, STAGE_CATEGORY_DANGER_REHEARSAL)
         for _ in range(5):
