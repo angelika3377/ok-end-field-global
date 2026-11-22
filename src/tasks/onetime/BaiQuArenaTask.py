@@ -215,11 +215,6 @@ class BaiQuArenaTask(Common, SearchMixin, BattleMixin):  # 百趣演武独立活
             bool(self._next_round_button() or self._leave_button()) or super().is_battle_settlement()
         )  # 及时退出战斗，不等待通用十五秒兜底
 
-    def _check_single_exit_condition(self):  # 内层战斗同样需要识别活动结算
-        return (
-            bool(self._next_round_button() or self._leave_button()) or super()._check_single_exit_condition()
-        )  # 沿用父类连续两次判定，不等待队伍 HUD 消失
-
     def run(self):  # GUI 和 MCP 共用完整业务流程
         count = int(self.config.get("刷取次数", 1))  # 兼容尚未保存新配置的用户
         if not 1 <= count <= 999:  # 运行时同样验证配置范围

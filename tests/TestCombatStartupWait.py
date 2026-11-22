@@ -54,6 +54,18 @@ class TestCombatStartupWait(unittest.TestCase):
 
         self.assertAlmostEqual(elapsed(3), elapsed(0), places=6)
 
+    def test_explicit_daily_delay_only_defers_the_skill_rotation(self):
+        task = _FakeTask({"技能释放": ["1"], "启动技能点数": 1}, skill=3)
+        attack_times = []
+        skill_times = []
+        task.mouse_down = lambda **kwargs: attack_times.append(task.active_time())
+        task.send_key = lambda key: skill_times.append(task.active_time())
+
+        self.assertTrue(AutoCombatLogic(task).run(burst_delay=1.5))
+
+        self.assertLess(attack_times[0], 1.5)
+        self.assertGreaterEqual(skill_times[0], 1.5)
+
     @patch.object(TimedCombatLogic, "run", return_value=True)
     def test_timing_combat_forces_zero_startup_delay(self, base_run):
         logic = ImmediateTimedCombatLogic(object())
