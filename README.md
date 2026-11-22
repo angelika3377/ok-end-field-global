@@ -38,7 +38,9 @@ For the original version, download the Global Windows installer from [upstream G
 
 This is an external tool for automating repetitive steps in Arknights: Endfield. The features described here use on-screen recognition and ordinary Windows input. The project is open source and free, and its upstream README describes it as intended for personal learning and exchange. See the [license](LICENSE) for the applicable terms.
 
-The game's fair-play notice warns that using unauthorized third-party tools such as bots, macros, and cheats can lead to forfeiture of rewards, suspension, or a permanent ban. Use the tool at your own risk and check the game's current rules. The game name and trademarks belong to their respective owners.
+**This experimental fork is provided for research purposes only. Use it at your own discretion and risk.** Automated gameplay may violate the game's rules and can result in forfeiture of rewards, account suspension, or a permanent ban.
+
+All product names, logos, and trademarks are the property of their respective owners.
 
 ## Requirements
 
