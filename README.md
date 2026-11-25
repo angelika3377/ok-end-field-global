@@ -142,6 +142,8 @@ For OCR, template, and color-recognition issues, use `main_debug.py` and inspect
 
 ## Upstream community
 
+[Community links: Discord, QQ groups, QQ channel](https://ok-script.com/en/community/?project=ok-end-field) (maintained in [community_links.yml](community_links.yml))
+
 [Discord](https://discord.gg/vVyCatEBgA) · [QQ Channel](https://pd.qq.com/s/djmm6l44y) · [QQ user and developer groups](https://github.com/AliceJump/ok-end-field#-%E5%8A%A0%E5%85%A5%E6%88%91%E4%BB%AC)
 
 The upstream developer group is intended for contributors with a GitHub account who can already run the project from source. The [ok-script](https://ok-script.com/) framework can also be used to build other automation projects.
