@@ -25,6 +25,8 @@ from src.tasks.navigation.mixin.zip_line_mixin import ZipLineMixin
 _DIGITS_ONLY_RE = re.compile(r"^\d+$")
 _ENGLISH_CHANGE_GOODS = re.compile(r"\bgoods\b", re.IGNORECASE)
 _ENGLISH_GOODS_PICKER = re.compile(r"\bSelect\s+Goods\s+to\s+Trade\b", re.IGNORECASE)
+_ENGLISH_OUTPOST_HEADER = re.compile(r"\bOutpost\b", re.IGNORECASE)
+_OUTPOST_BALANCE = re.compile(r"^(?:\d{1,3}(?:[, .]\d{3})+|\d+)$")
 
 
 class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
@@ -111,27 +113,40 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         }
         self.validate_unique_sub_config_parents()
 
+    def _select_outpost_tab(self, outpost_name):
+        label = get_world_map_text(self.lang, outpost_name)
+        wuling_tabs = outpost_dict.get("武陵", [])
+        is_english_wuling = self.lang.locale == "en_US" and outpost_name in wuling_tabs
+        if is_english_wuling:
+            # The tab can split the name across OCR boxes. Its prefix is unique in Wuling.
+            words = label.split()[:2]
+            label = re.compile(r"\b" + r"\s+".join(map(re.escape, words)) + r"\b", re.IGNORECASE)
+        title = self.box_of_screen(0.145, 0.225, 0.64, 0.31)
+        if self.wait_ocr(match=label, box=title, time_out=0.8):
+            return True
+        tabs = self.box_of_screen(0.055, 0.085, 0.94, 0.175)
+        if self.wait_click_ocr(match=label, box=tabs, time_out=2) and self.wait_ocr(
+            match=label, box=title, time_out=2, settle_time=0.3
+        ):
+            return True
+        if is_english_wuling and len(wuling_tabs) == 3 and self.wait_ocr(
+            match=_ENGLISH_OUTPOST_HEADER, box=self.box_of_screen(0.025, 0.015, 0.26, 0.08), time_out=1
+        ):
+            position = (0.18, 0.42, 0.655)[wuling_tabs.index(outpost_name)]
+            self.click_relative(position, 0.13, name="wuling_outpost_tab")
+            return bool(self.wait_ocr(match=label, box=title, time_out=3, settle_time=0.3))
+        return False
+
     def read_outpost_ticket_num(self, outpost_name):
-        num_str = self.wait_ocr(
-            match=re.compile(r"\d+"),
-            box=self.box_of_screen(
-                1224 / 1920,
-                235 / 1080,
-                1551 / 1920,
-                356 / 1080,
-            ),
-            time_out=5,
+        results = self.wait_ocr(
+            match=_OUTPOST_BALANCE, box=self.box_of_screen(0.655, 0.259, 0.790, 0.315), time_out=5
         )
-
-        num = 0
-        if num_str and hasattr(num_str[0], "name"):
-            try:
-                num = int(num_str[0].name)
-            except ValueError:
-                num = 0
-
-        self.log_info(f"{outpost_name} 据点当前券数量: {num}")
-        return num
+        if not results:
+            self.log_info(f"{outpost_name}: could not read the stock bill balance")
+            return None
+        balance = int(re.sub(r"[^0-9]", "", results[0].name))
+        self.log_info(f"{outpost_name} 据点当前券数量: {balance}")
+        return balance
 
     def perform_outpost_exchange(
         self,
@@ -146,11 +161,8 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         priority_list = parse_sequence_list(priority_list)
         excluded_goods = excluded_goods if excluded_goods is not None else set()
 
-        if not self.wait_click_ocr(
-            match=get_world_map_text(self.lang, outpost_name),
-            box=self.box.top,
-            time_out=5,
-        ):
+        if not self._select_outpost_tab(outpost_name):
+            self.log_info(f"{outpost_name}: selected outpost tab could not be verified")
             return False
 
         localized_goods = {
@@ -166,7 +178,9 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             _ENGLISH_CHANGE_GOODS if english_priority_picker else self.lang.daily_routine_mixin.k_bb6c696b
         )
         change_area = self.box_of_screen(1700 / 1920, 610 / 1080, 1, 710 / 1080)
-        self.wait_ocr(match=change_goods, box=change_area, time_out=5)
+        if not self.wait_ocr(match=change_goods, box=change_area, time_out=5):
+            self.log_info(f"{outpost_name}: Switch Goods did not appear")
+            return False
 
         goods_patterns = [
             re.compile(re.escape(get_world_map_text(self.lang, good)))
@@ -237,6 +251,8 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         confirm_button = None
 
         num = self.read_outpost_ticket_num(outpost_name)
+        if num is None:
+            return False
         if num < ticket_minimum:
             self.log_info(f"{outpost_name} 据点当前券数量不足 (<{ticket_minimum})，停止兑换")
             max_attempts = 0
@@ -277,7 +293,12 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             if not normalized_goods:
                 self.log_info(f"{outpost_name} 没有可兑换的货物")
                 if restrict_goods:
-                    self.back()
+                    if english_priority_picker:
+                        self.click_relative(0.86, 0.186, name="close_goods_picker")
+                    else:
+                        self.back()
+                    if not self.wait_ocr(match=change_goods, box=change_area, time_out=3):
+                        return False
                 break
 
             normalized_goods.sort(key=lambda g: (priority_score(g.name), -len(g.name)))
@@ -312,10 +333,14 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             ):
                 self.log_info(f"{outpost_name}: could not confirm selection of {exchange_good.name}")
                 return False
-            outpost = self.wait_click_ocr(match=get_world_map_text(self.lang, outpost_name), box=self.box.top, time_out=5)
-            if restrict_goods and not outpost:
+            if not self.wait_ocr(match=change_goods, box=change_area, time_out=5):
                 return False
-            if not self.plus_max():
+            if not self.plus_max() and not (
+                english_priority_picker
+                and self.wait_ocr(
+                    match=re.compile(r"^1$"), box=self.box_of_screen(0.923, 0.780, 0.944, 0.821), time_out=1
+                )
+            ):
                 if restrict_goods:
                     self.log_info(f"{outpost_name}: maximum quantity unavailable for {exchange_good.name}")
                     continue
@@ -343,8 +368,14 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             if quantity_limit is not None:
                 self.click_confirm(after_sleep=2)
 
-            self.wait_pop_up()
-            num = self.read_outpost_ticket_num(outpost_name)
+            confirmed = self.wait_pop_up(time_out=5)
+            remaining = self.read_outpost_ticket_num(outpost_name)
+            if remaining is None:
+                return False
+            if not confirmed and remaining >= num:
+                self.log_info(f"{outpost_name}: trade outcome could not be verified")
+                return False
+            num = remaining
             if num < ticket_minimum:
                 self.log_info(f"{outpost_name} 据点当前券数量不足 (<{ticket_minimum})，停止兑换")
                 break
@@ -354,6 +385,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
                 self.log_info(f"货物已兑换完，加入地区排除列表: {exchange_good.name}")
 
         self.log_info(f"{outpost_name} 兑换操作完成")
+        return True
 
     def exchange_outpost_goods(self, target_areas=None, keep_area_context=False):
         self.info_set("current_task", "exchange_outpost_goods")
@@ -388,9 +420,15 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
                     excluded_goods_by_area[area],
                     only_priority_goods,
                 )
-                if result is False:
+                if not result:
                     completed = False
-                self.log_info(f"完成兑换据点: {outpost_name}")
+                    self.log_info(f"{outpost_name}: outpost exchange incomplete")
+                    if not self.safe_back(feature=fL.transaction_overview, time_out=6, once_time_out=1):
+                        break
+                    if not self.to_model_area(area, "据点管理"):
+                        break
+                else:
+                    self.log_info(f"完成兑换据点: {outpost_name}")
 
             self.log_info(f"{area} 区域据点兑换完成")
             if keep_area_context:
@@ -948,6 +986,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         enabled_outpost = "据点兑换" in selected
         enabled_buy = "买物资" in selected
         enabled_trade = "买卖货" in selected
+        completed = True
 
         for area in self.get_region_areas(areas_list):
             self.log_info(self.tr("开始处理地区建设: {area}").format(area=self.tr(area)))
@@ -956,6 +995,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
                 keep_area_context=True,
             ):
                 self.log_info(self.tr("据点兑换失败: {area}").format(area=self.tr(area)))
+                completed = False
 
             if enabled_trade:
                 # 买卖货：买入后通过 after_buy 回调执行「买物资」。
@@ -988,7 +1028,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             self.safe_back(feature=fL.transaction_overview, once_time_out=3)
             self.log_info(self.tr("完成地区建设: {area}").format(area=self.tr(area)))
 
-        return True
+        return completed
 
     def _buy_staple_after_trade(self, current_area):
         """买卖货买入后的「买物资」回调。"""

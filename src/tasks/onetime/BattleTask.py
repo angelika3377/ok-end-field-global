@@ -1180,8 +1180,10 @@ class BattleTask(Common, MapMixin, ZipLineMixin, BattleMixin):
         ):
             return False
 
-        # The totals row shows the active selection and marks unaffordable
-        # Sanity or permit costs in red.
+        return self._reward_cost_selected(cost)
+
+    def _reward_cost_selected(self, cost):
+        # The totals row reflects the selection and marks unaffordable costs in red.
         totals_box = self.box_of_screen(0.52, 0.735, 0.68, 0.795)
         if not self.wait_ocr(
             match=re.compile(rf"(?<!\d){cost}\s*$"),
@@ -1193,6 +1195,22 @@ class BattleTask(Common, MapMixin, ZipLineMixin, BattleMixin):
         blue, green, red = totals.transpose(2, 0, 1)
         red_cost = (red > green + 25) & (red > blue + 20) & (abs(green - blue) < 40)
         return red_cost.sum() < 6
+
+    def _select_standard_reward(self, cost):
+        if self.lang.locale != "en_US":
+            return self.wait_click_feature(
+                feature=fL.battle_cost_x1, time_out=2, horizontal_variance=0.3, raise_if_not_found=False
+            )
+
+        row = self.box_of_screen(0.28, 0.36, 0.72, 0.525)
+        if not self.wait_ocr(
+            match=re.compile(rf"\b{cost}\s+to\s+acquire\s+rewards\b", re.IGNORECASE), box=row, time_out=2
+        ) and not self.wait_feature(feature=fL.battle_cost_x1, box=row, time_out=2, raise_if_not_found=False):
+            return False
+
+        # The x1 illustration is not a reliable click target in the Global UI.
+        self.click_relative(0.691, 0.44, name="standard_reward_radio", after_sleep=0.15)
+        return self._reward_cost_selected(cost)
 
     def get_claim(self):
         """Claim the best affordable reward, or return None if claiming fails."""
@@ -1208,24 +1226,19 @@ class BattleTask(Common, MapMixin, ZipLineMixin, BattleMixin):
         if sanity >= double_cost and self._select_double_reward(double_cost):
             need_ticket_number = double_cost
             self.log_info(f"Double Rewards selected. Sanity cost: {double_cost}")
-        elif self.wait_click_feature(
-            feature=fL.battle_cost_x1,
-            time_out=2,
-            horizontal_variance=0.3,
-            raise_if_not_found=False,
-        ):
+        elif self._select_standard_reward(base_cost):
             need_ticket_number = base_cost
             self.log_info(f"Standard Rewards selected. Sanity cost: {base_cost}")
         else:
-            self.mark_task_failure("未找到 '获得奖励' 按钮, 任务失败")
+            self.mark_task_failure("Could not verify the standard reward selection")
             return None
 
         self.next_frame()
         if not self.wait_click_feature(
             feature=fL.skip_dialog_confirm,
             box=self.box_of_screen(0.627, 0.802, 0.670, 0.965),
-            time_out=2,
-            settle_time=1,
+            time_out=5,
+            settle_time=0.3,
             raise_if_not_found=False,
         ):
             self.mark_task_failure("领取失败")
