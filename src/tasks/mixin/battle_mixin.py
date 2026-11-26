@@ -1191,6 +1191,16 @@ class BattleMixin(BaseEfTask):
                 detector.reset_label(str(region["label"]))
             return False
 
+        # 战斗结束时左侧队伍 HUD 先消失，退出判定要持续 1 秒才通过；这段时间里结算白光、
+        # 场景淡出会被误认成推荐脉冲。HUD 已不可见时不按技能键，避免在战斗外触发
+        # 1-4 号快捷栏（如放置建筑）。终结技演出同样隐藏 HUD，此时按键本就无效。
+        if confirmed and self._squad_hud_hidden():
+            labels = "、".join(label for _, _, label in confirmed)
+            self.log_info(f"推荐技能命中但左侧队伍 HUD 不可见，不按键: {labels}")
+            for _, _, label in confirmed:
+                detector.reset_label(label)
+            return False
+
         pressed = False
         for slot, _, label in confirmed:
             key = str(slot)
@@ -1198,6 +1208,12 @@ class BattleMixin(BaseEfTask):
             self.log_info(f"推荐技能 {label} 命中, 按下按键 {key}（队伍 {member_count} 人）")
             pressed = True
         return pressed
+
+    def _squad_hud_hidden(self) -> bool:
+        """左侧队伍 HUD 是否已确认不可见（退出判定已记下消失时刻，或当前帧检测为不可见）。"""
+        if getattr(self, "_squad_hud_absent_since", None) is not None:
+            return True
+        return self.has_team_hud() is False
 
     def probe_pulse(self):
         """独立脉冲探针：观测当前帧各技能按钮区域的白色脉冲并落盘。

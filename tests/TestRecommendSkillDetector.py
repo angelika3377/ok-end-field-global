@@ -11,6 +11,7 @@
 """
 
 import unittest
+import unittest.mock
 
 import cv2
 import numpy as np
@@ -156,6 +157,97 @@ class TestRecommendSkillDetector(unittest.TestCase):
         self.det.reset()
         # 新战斗首帧白圈 → 重新产生上升沿。
         self.assertTrue(self.det.detect(pulse, 0.920, 0.898, 0.037, "批次3"))
+
+
+class _RecommendHarness:
+    """BattleMixin.use_recommend_skill 所需的最小 task 表面。"""
+
+    from src.tasks.mixin.battle_mixin import BattleMixin as _BattleMixin
+
+    use_recommend_skill = _BattleMixin.use_recommend_skill
+    _squad_hud_hidden = _BattleMixin._squad_hud_hidden
+
+    def __init__(self, frame, hud_present=True, absent_since=None):
+        self.frame = frame
+        self.hud_present = hud_present
+        self._squad_hud_absent_since = absent_since
+        self._battle_member_count = 4
+        self._squad_dead_slots = set()
+        self.pressed = []
+        self.logs = []
+
+    def get_battle_config(self, key, default=None):
+        return True
+
+    def active_time(self):
+        return 1000.0
+
+    def has_team_hud(self):
+        return self.hud_present
+
+    def press_combat_key(self, key):
+        self.pressed.append(key)
+
+    def log_info(self, message, *args, **kwargs):
+        self.logs.append(message)
+
+    def log_debug(self, *args, **kwargs):
+        pass
+
+
+class TestRecommendSkillHudGuard(unittest.TestCase):
+    """战斗结束后 HUD 消失的窗口内不应因推荐脉冲误按 1-4。"""
+
+    def setUp(self):
+        from src.image import recommend_skill_detector
+
+        self.detector = RecommendSkillDetector()
+        patcher = unittest.mock.patch.object(
+            recommend_skill_detector, "get_recommend_skill_detector", return_value=self.detector
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = unittest.mock.patch(
+            "src.tasks.mixin.battle_mixin.get_recommend_skill_detector", return_value=self.detector
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def pulse_frame(self):
+        img = np.full((H, W, 3), COLOR_BG, np.uint8)
+        for index, cx in enumerate((0.820, 0.870, 0.920, 0.970)):
+            color = COLOR_WHITE if index == 0 else COLOR_RIM_REST
+            img = np.maximum(img, render(cx_n=cx, signal_color=color))
+        return img
+
+    def test_pulse_presses_key_while_hud_visible(self):
+        task = _RecommendHarness(self.pulse_frame())
+        self.assertTrue(task.use_recommend_skill())
+        self.assertEqual(task.pressed, ["1"])
+
+    def test_pulse_ignored_when_hud_reported_hidden(self):
+        task = _RecommendHarness(self.pulse_frame(), hud_present=False)
+        self.assertFalse(task.use_recommend_skill())
+        self.assertEqual(task.pressed, [])
+        self.assertTrue(any("HUD 不可见" in message for message in task.logs))
+
+    def test_pulse_ignored_while_exit_check_tracks_hud_absence(self):
+        task = _RecommendHarness(self.pulse_frame(), absent_since=999.5)
+        self.assertFalse(task.use_recommend_skill())
+        self.assertEqual(task.pressed, [])
+
+    def test_unknown_hud_state_still_presses(self):
+        task = _RecommendHarness(self.pulse_frame(), hud_present=None)
+        self.assertTrue(task.use_recommend_skill())
+        self.assertEqual(task.pressed, ["1"])
+
+    def test_suppressed_pulse_can_fire_again_when_hud_returns(self):
+        frame = self.pulse_frame()
+        task = _RecommendHarness(frame, hud_present=False)
+        self.assertFalse(task.use_recommend_skill())
+        task.hud_present = True
+        self.assertTrue(task.use_recommend_skill())
+        self.assertEqual(task.pressed, ["1"])
 
 
 if __name__ == "__main__":
