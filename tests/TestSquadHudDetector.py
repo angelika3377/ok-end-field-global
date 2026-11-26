@@ -122,6 +122,7 @@ class TestSquadHudDetector(unittest.TestCase):
 class _ExitHarness:
     _check_single_exit_condition = BattleMixin._check_single_exit_condition
     is_combat_ended = BattleMixin.is_combat_ended
+    is_battle_settlement = BattleMixin.is_battle_settlement
     ULT_EXIT_DELAY = 3.0
 
     def __init__(self):
@@ -136,6 +137,9 @@ class _ExitHarness:
 
     def find_feature(self, **kwargs):
         return False
+
+    def box_of_screen(self, *args, **kwargs):
+        return None
 
     def ocr_lv(self):
         return self.lv

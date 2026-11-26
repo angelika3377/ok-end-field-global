@@ -1293,9 +1293,7 @@ class BattleTask(Common, MapMixin, ZipLineMixin, BattleMixin):
         ):
             self.mark_task_failure("领取失败")
             return None
-        if not self.wait_until(
-            lambda: not self.find_one(feature=fL.get_claim_page), time_out=5, settle_time=0.3
-        ):
+        if not self.wait_until(lambda: not self.find_one(feature=fL.get_claim_page), time_out=5, settle_time=0.3):
             self.mark_task_failure("Reward claim screen did not close after confirmation")
             return None
         remaining = sanity - need_ticket_number

@@ -225,9 +225,10 @@ class TestBaiQuArenaTask(unittest.TestCase):
             task = Mock()
             task._next_round_button.return_value = next_round
             task._leave_button.return_value = final
-            with patch.object(BattleMixin, "_check_single_exit_condition") as generic:
-                self.assertTrue(BaiQuArenaTask._check_single_exit_condition(task))
-                generic.assert_not_called()
+            # 通用退出判定先走 is_battle_settlement，百趣结算按钮经由覆写方法生效。
+            task.is_battle_settlement.side_effect = lambda task=task: BaiQuArenaTask.is_battle_settlement(task)
+            self.assertTrue(BattleMixin._check_single_exit_condition(task))
+            task.ocr_lv.assert_not_called()
 
     def test_missing_light_never_starts_auto_battle(self):
         task = Mock()

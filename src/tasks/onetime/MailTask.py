@@ -5,7 +5,6 @@ from qfluentwidgets import FluentIcon
 from src.icons import Icons
 from src.tasks.mixin.common import Common
 
-
 _ENGLISH_MAILBOX = re.compile(r"\bMail\s*box\b|^\W*Mail\W*$", re.IGNORECASE)
 _ENGLISH_CLAIM_ALL = re.compile(r"\b(?:Claim|Collect|Take)\s*All\b", re.IGNORECASE)
 _ENGLISH_EMPTY_MAIL = re.compile(
@@ -57,8 +56,10 @@ class MailTask(Common):
             self.press_key("esc")
             return True
 
-        if english and not confirmed and self.wait_ocr(
-            match=_ENGLISH_EMPTY_MAIL, box=self.box_of_screen(0.05, 0.15, 0.95, 0.95), time_out=2
+        if (
+            english
+            and not confirmed
+            and self.wait_ocr(match=_ENGLISH_EMPTY_MAIL, box=self.box_of_screen(0.05, 0.15, 0.95, 0.95), time_out=2)
         ):
             confirmed = True
             self.log_info("Mailbox has no claimable attachments")

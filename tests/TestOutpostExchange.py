@@ -16,10 +16,11 @@ class TestOutpostExchange(unittest.TestCase):
         feature._get_outpost_trade_limit = Mock(return_value=None)
         available_goods = goods if goods is not None else [SimpleNamespace(name="息壤玉葫芦")]
         feature.lang = SimpleNamespace(
+            locale="zh_CN",
             daily_routine_mixin=SimpleNamespace(
                 k_bb6c696b="更换",
                 k_70b20820="选择货物",
-            )
+            ),
         )
         feature.box = SimpleNamespace(top=object(), top_left=object())
         feature.log_info = Mock()
@@ -31,7 +32,8 @@ class TestOutpostExchange(unittest.TestCase):
             boxes = [copy(box) for box in available_goods]
             return boxes if match is None else find_boxes_by_name(boxes, match)
 
-        feature.wait_ocr = Mock(return_value=[])
+        # 页签标题、「更换」按钮和选择面板都必须先被确认可见，才会进入兑换流程。
+        feature.wait_ocr = Mock(return_value=[SimpleNamespace(name="visible")])
         feature.ocr = Mock(side_effect=collect_ocr)
         feature.wait_until = Mock(side_effect=lambda condition, **kwargs: condition())
         feature.read_outpost_ticket_num = Mock(side_effect=ticket_numbers)
@@ -40,6 +42,12 @@ class TestOutpostExchange(unittest.TestCase):
         feature.plus_max = Mock(return_value=True)
         feature.wait_click_feature = Mock(return_value=True)
         feature.wait_pop_up = Mock(return_value=False)
+        # 仅优先商品模式会确认选择框已关闭、滚动面板并在无货时关闭面板。
+        feature.find_one = Mock(return_value=None)
+        feature.scroll_relative = Mock()
+        feature.wait_ui_stable = Mock()
+        feature.back = Mock()
+        feature.click_relative = Mock()
         return feature
 
     def test_quantity_bins_and_ocr_fallback(self):
@@ -175,6 +183,10 @@ class TestOutpostExchange(unittest.TestCase):
         feature = self.make_exchange_feature([1000, 999], [SimpleNamespace(name="货物甲")])
         with (
             patch("src.tasks.onetime.RegionalBuildTask.goods_dict", {"武陵": ["货物", "货物甲乙"]}),
+            patch(
+                "src.tasks.onetime.RegionalBuildTask.get_goods_by_outpost_name",
+                return_value=["货物", "货物甲乙"],
+            ),
             patch(
                 "src.tasks.onetime.RegionalBuildTask.get_world_map_text",
                 side_effect=lambda lang, text: text,
@@ -322,6 +334,7 @@ class TestOutpostExchange(unittest.TestCase):
         def perform(outpost_name, priority_list, excluded_goods, only_priority_goods):
             exclusion_sets[outpost_name] = excluded_goods
             excluded_goods.add(outpost_name)
+            return True
 
         feature.perform_outpost_exchange = Mock(side_effect=perform)
 
@@ -342,8 +355,8 @@ class TestOutpostExchange(unittest.TestCase):
         self.assertEqual(exclusion_sets["据点乙"], {"据点甲", "据点乙"})
         self.assertEqual(exclusion_sets["据点丙"], {"据点丙"})
 
-    def test_clicked_exchange_is_excluded_even_when_popup_is_not_confirmed(self):
-        """已点击兑换但券数未下降时排除该货品，避免重复选择。"""
+    def test_unverified_exchange_stops_without_excluding_good(self):
+        """已点击兑换但既无弹窗、券数也未下降时无法确认结果：停止本据点且不排除货品。"""
         feature = self.make_exchange_feature([1000, 1000, 0])
         excluded_goods = set()
 
@@ -351,12 +364,13 @@ class TestOutpostExchange(unittest.TestCase):
             "src.tasks.onetime.RegionalBuildTask.get_world_map_text",
             side_effect=lambda lang, text: text,
         ):
-            feature.perform_outpost_exchange(
+            result = feature.perform_outpost_exchange(
                 "天王坪援建点",
                 excluded_goods=excluded_goods,
             )
 
-        self.assertEqual(excluded_goods, {"息壤玉葫芦"})
+        self.assertFalse(result)
+        self.assertEqual(excluded_goods, set())
         self.assertEqual(feature.read_outpost_ticket_num.call_count, 2)
         feature.plus_max.assert_called_once()
         feature.wait_click_feature.assert_called_once()

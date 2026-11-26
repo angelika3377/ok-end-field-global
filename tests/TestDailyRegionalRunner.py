@@ -147,11 +147,12 @@ class TestDailyRegionalRunner(unittest.TestCase):
         self.assertEqual(runner.safe_back.call_count, 2)
 
     # ── 据点兑换失败 → 记录日志并继续下一地区 ──
-    def test_outpost_failure_logs_and_continues(self):
+    def test_outpost_failure_logs_and_reports_incomplete(self):
+        # 据点兑换失败时继续处理后续地区，但整体结果标记为未完成，便于日常汇总如实反映。
         runner = _make_runner(["据点兑换"], exchange_result=False)
         result = self.run_runner(runner)
 
-        self.assertTrue(result)
+        self.assertFalse(result)
         logged = " ".join(call.args[0] for call in runner.log_info.call_args_list)
         self.assertIn("据点兑换失败", logged)
 

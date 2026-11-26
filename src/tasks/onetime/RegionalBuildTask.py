@@ -9,7 +9,6 @@ from src.core.sequence_parser import parse_sequence_list
 from src.data.FeatureList import FeatureList as fL
 from src.data.world_map import areas_list, goods_dict, outpost_dict
 from src.data.world_map_utils import (
-    get_area_by_outpost_name,
     get_goods_by_outpost_name,
     get_world_map_matcher,
     get_world_map_text,
@@ -129,8 +128,12 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             match=label, box=title, time_out=2, settle_time=0.3
         ):
             return True
-        if is_english_wuling and len(wuling_tabs) == 3 and self.wait_ocr(
-            match=_ENGLISH_OUTPOST_HEADER, box=self.box_of_screen(0.025, 0.015, 0.26, 0.08), time_out=1
+        if (
+            is_english_wuling
+            and len(wuling_tabs) == 3
+            and self.wait_ocr(
+                match=_ENGLISH_OUTPOST_HEADER, box=self.box_of_screen(0.025, 0.015, 0.26, 0.08), time_out=1
+            )
         ):
             position = (0.18, 0.42, 0.655)[wuling_tabs.index(outpost_name)]
             self.click_relative(position, 0.13, name="wuling_outpost_tab")
@@ -138,9 +141,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
         return False
 
     def read_outpost_ticket_num(self, outpost_name):
-        results = self.wait_ocr(
-            match=_OUTPOST_BALANCE, box=self.box_of_screen(0.655, 0.259, 0.790, 0.315), time_out=5
-        )
+        results = self.wait_ocr(match=_OUTPOST_BALANCE, box=self.box_of_screen(0.655, 0.259, 0.790, 0.315), time_out=5)
         if not results:
             self.log_info(f"{outpost_name}: could not read the stock bill balance")
             return None
@@ -166,17 +167,15 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             return False
 
         localized_goods = {
-            good: get_world_map_text(self.lang, good)
-            for good in get_goods_by_outpost_name(outpost_name)
+            good: get_world_map_text(self.lang, good) for good in get_goods_by_outpost_name(outpost_name)
         }
         can_exchange_goods = list(localized_goods.values())
+        labels = {name.casefold(): name for name in can_exchange_goods}
         priority_list = [localized_goods.get(item, item) for item in priority_list]
         restrict_goods = only_priority_goods and bool(priority_list)
         ticket_minimum = 1 if restrict_goods else 1000
         english_priority_picker = restrict_goods and self.lang.locale == "en_US"
-        change_goods = (
-            _ENGLISH_CHANGE_GOODS if english_priority_picker else self.lang.daily_routine_mixin.k_bb6c696b
-        )
+        change_goods = _ENGLISH_CHANGE_GOODS if english_priority_picker else self.lang.daily_routine_mixin.k_bb6c696b
         change_area = self.box_of_screen(1700 / 1920, 610 / 1080, 1, 710 / 1080)
         if not self.wait_ocr(match=change_goods, box=change_area, time_out=5):
             self.log_info(f"{outpost_name}: Switch Goods did not appear")
@@ -197,51 +196,49 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
                     return index
             return len(priority_list)
 
+        def match_good_name(raw_name):
+            """把 OCR 文本规范为可兑换货名；无法可靠匹配时返回 None。"""
+            good_name = raw_name.strip("|｜丨 ")  # 清理 OCR 将卡片边框识别成的竖线。
+            # 单字即使与“息壤”等短货名只差一个字，也不作为货品。
+            if len(good_name) < 2:
+                return None
+            # Global 界面大小写不稳定，完整货名先按忽略大小写的字面量匹配。
+            exact = labels.get(good_name.casefold())
+            if exact:
+                return exact
+            # 保留原完整货名匹配，仅为新增近似匹配放行一次字符编辑。
+            max_distance = None if any(pattern.search(raw_name) for pattern in goods_patterns) else 1
+            # 不限距离的兼容路径保留原长度限制；阈值路径由编辑距离函数检查。
+            distances = (
+                (edit_distance(good_name, kw, max_distance=max_distance), kw)
+                for kw in can_exchange_goods
+                if max_distance is not None or len(good_name) >= len(kw) - 1
+            )
+            # 保留阈值内的实际距离，同距离优先长货名，无候选时返回 None。
+            best_match = min(
+                ((distance, kw) for distance, kw in distances if distance is not None),
+                key=lambda match: (match[0], -len(match[1])),
+                default=None,
+            )
+            return best_match[1] if best_match else None
+
         def collect_goods():
             """采集并规范化当前帧货品；仅有界面杂项时返回空列表以继续等待。"""
             normalized_goods = []
-            if restrict_goods:
-                card_area = self.box_of_screen(0.135, 0.23, 0.86, 0.76)
-                labels = {name.casefold(): name for name in can_exchange_goods}
-                for good in self.ocr(box=card_area):
-                    name = labels.get(good.name.strip("|｜丨 ").casefold())
-                    if (
-                        name
-                        and name not in skip_goods
-                        and name not in excluded_goods
-                        and priority_score(name) < len(priority_list)
-                    ):
-                        good.name = name
-                        normalized_goods.append(good)
-                return normalized_goods
-
-            for good in self.ocr():
-                good_name = good.name.strip("|｜丨")  # 清理 OCR 将卡片边框识别成的竖线。
-                # 单字即使与“息壤”等短货名只差一个字，也不作为货品。
-                if len(good_name) < 2:
+            frame_goods = self.ocr(box=self.box_of_screen(0.135, 0.23, 0.86, 0.76)) if restrict_goods else self.ocr()
+            for good in frame_goods:
+                standard_name = match_good_name(good.name)
+                if standard_name is None:
                     continue
-                # 保留原完整货名匹配，仅为新增近似匹配放行一次字符编辑。
-                max_distance = None if any(pattern.search(good.name) for pattern in goods_patterns) else 1
-                # 不限距离的兼容路径保留原长度限制；阈值路径由编辑距离函数检查。
-                distances = (
-                    (edit_distance(good_name, kw, max_distance=max_distance), kw)
-                    for kw in can_exchange_goods
-                    if max_distance is not None or len(good_name) >= len(kw) - 1
-                )
-                # 保留阈值内的实际距离，同距离优先长货名，无候选时返回 None。
-                best_match = min(
-                    ((distance, kw) for distance, kw in distances if distance is not None),
-                    key=lambda match: (match[0], -len(match[1])),
-                    default=None,
-                )
-                if best_match is None:
+                if restrict_goods and (
+                    standard_name in skip_goods
+                    or standard_name in excluded_goods
+                    or priority_score(standard_name) >= len(priority_list)
+                ):
                     continue
-                standard_name = best_match[1]
-
                 if good.name != standard_name:
                     self.log_info(f"修正 OCR 识别结果: '{good.name}' -> '{standard_name}'")
                     good.name = standard_name
-
                 normalized_goods.append(good)
             return normalized_goods
 
@@ -268,8 +265,7 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             else:
                 self.click(change_button)
             picker_title = (
-                _ENGLISH_GOODS_PICKER if english_priority_picker
-                else self.lang.daily_routine_mixin.k_70b20820
+                _ENGLISH_GOODS_PICKER if english_priority_picker else self.lang.daily_routine_mixin.k_70b20820
             )
             picker = self.wait_ocr(
                 match=picker_title,
