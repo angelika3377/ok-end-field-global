@@ -4035,3 +4035,8 @@ msgstr "Jincao Drink"
 
 msgid "灼铜零件"
 msgstr "Pyrrolite Part"
+msgid "旧水坝"
+msgstr "Old Dam"
+
+msgid "祀"
+msgstr "Si"

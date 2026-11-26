@@ -410,6 +410,9 @@ class EnvironmentMonitoringModule(_LangModuleBaseT):
     glowing_lankybeast: str
     """肚子鼓气后发光的吐虫长股兽"""
 
+    mysterious_graffiti: str
+    """谜之生物的涂鸦"""
+
     cleansing_jade: str
     """漱玉"""
 
@@ -790,6 +793,12 @@ class WorldMapModule(_LangModuleBaseT):
 
     k_a2eb44e6: re.Pattern[str]
     """跃迁浆体涂片"""
+
+    old_dam: re.Pattern[str]
+    """旧水坝"""
+
+    si_boss: re.Pattern[str]
+    """祀"""
 
 
 class ZipLineMixinModule(_LangModuleBaseT):
