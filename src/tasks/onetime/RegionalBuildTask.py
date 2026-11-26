@@ -26,6 +26,9 @@ _ENGLISH_CHANGE_GOODS = re.compile(r"\bgoods\b", re.IGNORECASE)
 _ENGLISH_GOODS_PICKER = re.compile(r"\bSelect\s+Goods\s+to\s+Trade\b", re.IGNORECASE)
 _ENGLISH_OUTPOST_HEADER = re.compile(r"\bOutpost\b", re.IGNORECASE)
 _OUTPOST_BALANCE = re.compile(r"^(?:\d{1,3}(?:[, .]\d{3})+|\d+)$")
+_PICKER_SCROLL_TO_TOP = 8
+_PICKER_SCROLL_STEP = -2
+_PICKER_MAX_SCROLL_STEPS = 10
 
 
 class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
@@ -222,10 +225,14 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             )
             return best_match[1] if best_match else None
 
+        # 最近一帧选择面板的原始 OCR 文本，用于判断滚动是否已到底。
+        last_frame_names = []
+
         def collect_goods():
             """采集并规范化当前帧货品；仅有界面杂项时返回空列表以继续等待。"""
             normalized_goods = []
             frame_goods = self.ocr(box=self.box_of_screen(0.135, 0.23, 0.86, 0.76)) if restrict_goods else self.ocr()
+            last_frame_names[:] = sorted(good.name for good in frame_goods)
             for good in frame_goods:
                 standard_name = match_good_name(good.name)
                 if standard_name is None:
@@ -241,6 +248,49 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
                     good.name = standard_name
                 normalized_goods.append(good)
             return normalized_goods
+
+        def scroll_picker(amount):
+            self.scroll_relative(0.75, 0.65, amount)
+            self.wait_ui_stable(refresh_interval=0.3)
+
+        def scan_priority_goods():
+            """浏览整个选择面板，返回停在最高优先级货品处时可点击的候选。
+
+            只看首屏会让排在后面的高优先级货品（如 Cuprium Part）被首屏的低优先级货品抢先。
+            先滚到顶部逐屏向下扫描；遇到当前能达到的最高优先级即提前停止，
+            滚到底仍未遇到时，回到记录的位置再点击最佳候选。
+            """
+            remaining = [name for name in can_exchange_goods if name not in skip_goods and name not in excluded_goods]
+            best_possible = min((priority_score(name) for name in remaining), default=len(priority_list))
+            best = None  # (score, step, name)
+            previous_frame = None
+            step = 0
+            scroll_picker(_PICKER_SCROLL_TO_TOP)  # 面板可能沿用上次的滚动位置
+            while True:
+                visible = self.wait_until(collect_goods, time_out=1) or []
+                for good in visible:
+                    score = priority_score(good.name)
+                    if best is None or score < best[0]:
+                        best = (score, step, good.name)
+                if best and best[0] <= best_possible:
+                    break
+                if step and last_frame_names == previous_frame:
+                    break  # 滚动后画面不变，已到列表底部
+                if step >= _PICKER_MAX_SCROLL_STEPS:
+                    break
+                previous_frame = list(last_frame_names)
+                scroll_picker(_PICKER_SCROLL_STEP)
+                step += 1
+
+            if best is None:
+                return []
+            if best[1] != step:
+                self.log_info(f"{outpost_name}: 回到最高优先级货品位置: {best[2]}")
+                scroll_picker(_PICKER_SCROLL_TO_TOP)
+                for _ in range(best[1]):
+                    scroll_picker(_PICKER_SCROLL_STEP)
+                visible = self.wait_until(collect_goods, time_out=1) or []
+            return [good for good in visible if good.name == best[2]]
 
         max_attempts = 7
         skip_goods = set()
@@ -275,16 +325,8 @@ class RegionalBuildTask(RegionScopeMixin, Common, MapMixin, ZipLineMixin):
             if restrict_goods and (not change_button or not picker):
                 self.log_info(f"{outpost_name}: goods picker did not open")
                 return False
-            # 标题、数量等文本不能提前结束等待，持续采集直到识别到候选货品。
-            normalized_goods = self.wait_until(collect_goods, time_out=1 if restrict_goods else 5)
-            if restrict_goods and not normalized_goods:
-                # The picker can reopen with the previous scroll position.
-                for scroll in (8, -2, -2, -2, -2):
-                    self.scroll_relative(0.75, 0.65, scroll)
-                    self.wait_ui_stable(refresh_interval=0.3)
-                    normalized_goods = self.wait_until(collect_goods, time_out=1)
-                    if normalized_goods:
-                        break
+            # 仅优先商品模式浏览整个面板；普通模式持续采集直到识别到候选货品。
+            normalized_goods = scan_priority_goods() if restrict_goods else self.wait_until(collect_goods, time_out=5)
 
             if not normalized_goods:
                 self.log_info(f"{outpost_name} 没有可兑换的货物")

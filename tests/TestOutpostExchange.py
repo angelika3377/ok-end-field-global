@@ -355,6 +355,60 @@ class TestOutpostExchange(unittest.TestCase):
         self.assertEqual(exclusion_sets["据点乙"], {"据点甲", "据点乙"})
         self.assertEqual(exclusion_sets["据点丙"], {"据点丙"})
 
+    def make_scrolling_feature(self, pages):
+        """按滚动位置返回不同面板内容；向上滚动回到顶部，向下滚动一屏。"""
+        # 兑换后券数归零，只观察第一轮选择。
+        feature = self.make_exchange_feature([1000, 0])
+        position = {"page": 0}
+
+        def scroll(_x, _y, amount):
+            if amount > 0:
+                position["page"] = 0
+            else:
+                position["page"] = min(position["page"] + 1, len(pages) - 1)
+
+        feature.scroll_relative = Mock(side_effect=scroll)
+        feature.ocr = Mock(
+            side_effect=lambda *args, **kwargs: [
+                SimpleNamespace(name=name, page=position["page"]) for name in pages[position["page"]]
+            ]
+        )
+        return feature
+
+    def run_priority_exchange(self, feature, priority_list):
+        with patch(
+            "src.tasks.onetime.RegionalBuildTask.get_world_map_text",
+            side_effect=lambda lang, text: text,
+        ):
+            feature.perform_outpost_exchange(
+                "天王坪援建点",
+                priority_list=priority_list,
+                only_priority_goods=True,
+            )
+        return feature.click.call_args_list[0].args[0]
+
+    def test_priority_scan_finds_higher_priority_good_below_first_screen(self):
+        """首屏只有次优先货品时继续向下扫描，选择排在后面的最高优先级货品。"""
+        feature = self.make_scrolling_feature([["赫铜零件", "灼铜零件"], ["息壤", "赤铜零件"], ["分离芯"]])
+        selected = self.run_priority_exchange(feature, ["赤铜零件", "赫铜零件", "灼铜零件"])
+        self.assertEqual(selected.name, "赤铜零件")
+        self.assertEqual(selected.page, 1)
+
+    def test_priority_scan_returns_to_best_good_after_reaching_list_end(self):
+        """扫描到底仍未出现最高优先级时，回到记录位置点击已见到的最佳货品。"""
+        feature = self.make_scrolling_feature([["分离芯", "灼铜零件"], ["息壤", "赫铜零件"], ["息壤玉葫芦"]])
+        selected = self.run_priority_exchange(feature, ["赤铜零件", "赫铜零件", "灼铜零件"])
+        self.assertEqual(selected.name, "赫铜零件")
+        self.assertEqual(selected.page, 1)
+
+    def test_priority_scan_stops_early_on_best_possible_good(self):
+        """首屏已有最高优先级货品时不再滚动整张列表。"""
+        feature = self.make_scrolling_feature([["赤铜零件", "赫铜零件"], ["灼铜零件"]])
+        selected = self.run_priority_exchange(feature, ["赤铜零件", "赫铜零件"])
+        self.assertEqual(selected.name, "赤铜零件")
+        # 只有回到顶部的一次滚动。
+        self.assertEqual(feature.scroll_relative.call_count, 1)
+
     def test_unverified_exchange_stops_without_excluding_good(self):
         """已点击兑换但既无弹窗、券数也未下降时无法确认结果：停止本据点且不排除货品。"""
         feature = self.make_exchange_feature([1000, 1000, 0])
